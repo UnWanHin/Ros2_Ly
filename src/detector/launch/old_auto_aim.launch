@@ -1,0 +1,34 @@
+<launch>
+  <arg name="config_file" default="$(find-pkg-share detector)/config/auto_aim_config.yaml"/>
+
+  <node pkg="gimbal_driver" exec="gimbal_driver_node" name="gimbal_driver" output="log">
+    <param from="$(var config_file)"/>
+    <env name="ROS_LOG_DIR" value="$(env HOME)/workspace/logs/gimbal_driver/log" />
+  </node>
+
+  <node pkg="behavior_tree" exec="behavior_tree_node" name="behavior_tree" output="log">
+    <param from="$(var config_file)"/>
+    <env name="ROS_LOG_DIR" value="$(env HOME)/workspace/logs/behavior_tree/log" />
+  </node>
+
+  <node pkg="detector" exec="detector_node" name="detector" output="log">
+    <param from="$(var config_file)"/>
+    </node>
+
+  <node pkg="tracker_solver" exec="tracker_solver_node" name="tracker_solver" output="log">
+    <param from="$(var config_file)"/>
+  </node>
+
+  <node pkg="predictor" exec="predictor_node" name="predictor" output="log">
+    <param from="$(var config_file)"/>
+  </node>
+
+  <node pkg="buff_hitter" exec="buff_hitter_node" name="buff_hitter" output="log">
+    <param from="$(var config_file)"/>
+  </node>
+
+  <node pkg="outpost_hitter" exec="outpost_hitter_node" name="outpost_hitter" output="screen">
+    <param from="$(var config_file)"/>
+  </node>
+
+</launch>

@@ -1,0 +1,34 @@
+/predictor_node:
+  ros__parameters:
+    # ----------------------------------------------------
+    # Solver 必須用點 (.)，因為 solver.cpp 是這樣寫的
+    # ----------------------------------------------------
+    "solver_config.camera_intrinsic_matrix": [
+      1331.1, 0.0, 624.5817,
+      0.0, 1330.1, 526.3662,
+      0.0, 0.0, 1.0
+    ]
+    "solver_config.camera_distortion_coefficients": [-0.1059, -0.3427, 0.0072, 0.0, 1.4125]
+    "solver_config.camera_offset": [0.0, 0.0, 52.6]
+    "solver_config.camera_rotation": [0.0, 3.3, 0.0]
+
+    # ----------------------------------------------------
+    # Controller 必須用點 (.)，因為 controller.cpp 是這樣寫的
+    # ----------------------------------------------------
+    "controller_config.bullet_speed": 23.0
+    "controller_config.shoot_delay": 0.02
+    
+    # 射擊表開關
+    "controller_config.shoot_table_adjust.enable": true
+    "controller_config.shoot_table_adjust.pitch.intercept": 0.5
+    "controller_config.shoot_table_adjust.pitch.coef_z": 0.0
+    "controller_config.shoot_table_adjust.pitch.coef_d": 0.0
+    "controller_config.shoot_table_adjust.pitch.coef_z2": 0.0
+    "controller_config.shoot_table_adjust.pitch.coef_zd": 0.0
+    "controller_config.shoot_table_adjust.pitch.coef_d2": 0.3
+    "controller_config.shoot_table_adjust.yaw.intercept": 0.0
+    "controller_config.shoot_table_adjust.yaw.coef_z": 0.0
+    "controller_config.shoot_table_adjust.yaw.coef_d": 0.0
+    "controller_config.shoot_table_adjust.yaw.coef_z2": 0.0
+    "controller_config.shoot_table_adjust.yaw.coef_zd": 0.0
+    "controller_config.shoot_table_adjust.yaw.coef_d2": 0.5

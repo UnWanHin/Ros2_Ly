@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+import os
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    home_dir = os.environ['HOME']
+    config_file = os.path.join(home_dir, 'ros2_ly_ws/src/detector/config/auto_aim_config.yaml')
+    
+    print(f"\033[92m[自瞄模式] 載入配置: {config_file}\033[0m")
+    
+    return LaunchDescription([
+        Node(
+            package='gimbal_driver',
+            executable='gimbal_driver_node',
+            name='gimbal_driver',
+            output='screen',
+            parameters=[config_file]
+        ),
+        Node(
+            package='detector',
+            executable='detector_node',
+            name='detector',
+            output='screen',
+            parameters=[config_file]
+        ),
+        Node(
+            package='tracker_solver',
+            executable='tracker_solver_node',
+            name='tracker_solver',
+            output='screen',
+            parameters=[config_file]
+        ),
+        Node(
+            package='predictor',
+            executable='predictor_node',
+            name='predictor_node',
+            output='screen',
+            parameters=[config_file]
+        ),
+        Node(
+            package='detector',
+            executable='simple_bridge_node',
+            name='simple_bridge',
+            output='screen',
+            parameters=[config_file]
+        ),
+    ])

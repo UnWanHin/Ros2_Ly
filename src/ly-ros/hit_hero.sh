@@ -1,1 +1,0 @@
-cp /home/hustlyrm/workspace/src/behavior_tree/Scripts/ConfigJson/hero.json /home/hustlyrm/workspace/src/behavior_tree/Scripts/config.json

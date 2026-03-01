@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>behavior_tree</name>
+  <version>0.0.1</version>
+  <description>Make sentry thinking smartly</description>
+  <maintainer email="TaciturnJian@github.com">Sango Forks</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <depend>rclcpp</depend>
+  <depend>behaviortree_cpp</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  
+
+  <depend>ament_index_cpp</depend>
+
+  <depend>gimbal_driver</depend>
+  <depend>auto_aim_common</depend>
+
+  <depend>fmt</depend>
+  <depend>boost</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

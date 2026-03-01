@@ -1,0 +1,246 @@
+// 改用SOLVER::global_solver_node = my_node_ptr;
+
+#include <rclcpp/rclcpp.hpp>
+#include <opencv2/opencv.hpp>
+#include <cv_bridge/cv_bridge.h>
+#include <cmath>
+
+// [ROS 2] 引入你的工具庫和消息頭文件
+#include "RosTools/RosTools.hpp"
+#include "solver/PoseSolver.hpp"
+#include <auto_aim_common/DetectionType.hpp>
+#include <auto_aim_common/msg/target.hpp>
+#include <auto_aim_common/msg/armor.hpp>
+#include <auto_aim_common/msg/armors.hpp>
+#include <std_msgs/msg/bool.hpp>
+
+// [引入你的模塊] 確保這些頭文件路徑正確
+#include "solver/solver.hpp"
+#include "detector/detector.hpp"
+#include "predictor/predictor.hpp"
+#include "predictor/OutpostPredictor.hpp"
+#include "predictor/DerectionJudger.hpp"
+#include "predictor/TopFilter.hpp"
+#include "controller/MuzzleSolver.hpp"
+#include "controller/BoardSelector.hpp"
+#include "utils/utils.h"
+
+using namespace LangYa;
+using namespace LY_UTILS;
+using namespace ly_auto_aim;
+using namespace std;
+
+#define MAX_LOSS_COUNT 10
+#define USE_MEASURE_UPDATE true
+#define USE_ITERATION_UPDATE false
+
+namespace {
+    // [ROS 2] 修正 Topic 定義: 加上 ::msg::
+    LY_DEF_ROS_TOPIC(ly_outpost_armors, "/ly/outpost/armors", auto_aim_common::msg::Armors);
+    LY_DEF_ROS_TOPIC(ly_outpost_enable, "/ly/outpost/enable", std_msgs::msg::Bool);
+    LY_DEF_ROS_TOPIC(ly_outpost_target, "/ly/outpost/target", auto_aim_common::msg::Target);
+
+    constexpr const char AppName[] = "outpost_hitter_node";
+
+    class OutpostHitterNode
+    {
+    public:
+        // [ROS 2] 構造函數修改：移除 argc/argv，因為初始化在 main 裡做
+        OutpostHitterNode() : node() 
+        {
+            // [ROS 2] node.Initialize 已經不需要了，刪除
+
+            // [ROS 2] 修正訂閱者回調
+            // 參數類型明確為 ConstSharedPtr (不帶 &)
+            node.GenSubscriber<ly_outpost_armors>([this](const auto_aim_common::msg::Armors::ConstSharedPtr msg) { 
+                outpost_detection_callback(msg); 
+            });
+
+            // 如果需要 enable 回调，可以解开注释
+            // node.GenSubscriber<ly_outpost_enable>([this](const std_msgs::msg::Bool::ConstSharedPtr msg) { outpost_enable_callback(msg); });
+
+            // 初始化各個模塊
+            // 注意：PoseSolver 的無參構造函數會使用全局變量 SOLVER::global_solver_node
+            // 所以我們必須在 main 函數裡先設置好那个全局变量
+            solver = std::make_unique<SOLVER::PoseSolver>();
+            
+            outpost_predictor = std::make_unique<PREDICTOR::OutpostPredictor>();
+            derection_judger = std::make_unique<PREDICTOR::DirectionJudger>();
+            top_filter = std::make_unique<PREDICTOR::TopFilter>();
+            muzzle_solver = std::make_unique<CONTROLLER::MuzzleSolver>(Eigen::Vector3d(0.0, 0.0, 0.0));
+            board_selector = std::make_unique<CONTROLLER::BoardSelector>();
+
+            // 初始化時間戳
+            last_time_stamp = node.now();
+
+            RCLCPP_WARN(node.get_logger(), "OutpostHitterNode> Initialized.");
+        }
+
+        ~OutpostHitterNode() = default;
+
+        // [ROS 2] Callback 修正：類型為 ConstSharedPtr
+        void outpost_detection_callback(const auto_aim_common::msg::Armors::ConstSharedPtr msg) {
+            // if(!outpost_enable.load()) return;
+
+            RCLCPP_WARN(node.get_logger(), "OutpostHitterNode> Received outpost detection message.");
+
+            // ** 步驟一：detection的獲取 **
+            rclcpp::Time stamp = msg->header.stamp;
+            float yaw_now = msg->yaw;
+            float pitch_now = msg->pitch; 
+            /// debug
+            yaw_now = 1000.0f;
+            pitch_now = 10.0f;
+
+            Detections detections;
+            convertToDetections(msg, detections);
+            RCLCPP_WARN(node.get_logger(), "Conrners converted");
+            
+            if(detections.empty()) {
+                RCLCPP_WARN(node.get_logger(), "OutpostHitterNode> outpost not found.");
+                return;
+            }
+            
+            RCLCPP_INFO(node.get_logger(), "#####1");
+
+            // ** 步驟二: 解算 **
+            SOLVER::ArmorPoses armor_poses = solver->solveArmorPoses(detections, yaw_now, pitch_now);
+            RCLCPP_INFO(node.get_logger(), "Armor poses solved");
+
+            // ** 步驟三： 預測 **
+            /// 取出最近的裝甲板
+            auto min_pitch_armor = std::min_element(armor_poses.begin(), armor_poses.end(),[](const SOLVER::ArmorPose &a, const SOLVER::ArmorPose &b)
+                                                    { return a.pyd.distance < b.pyd.distance; });
+
+            if (min_pitch_armor == armor_poses.end()) {
+                RCLCPP_WARN(node.get_logger(), "OutpostHitterNode> No valid armor poses found.");
+                return;
+            }
+            PREDICTOR::OutpostInformation outpost_info;
+            /// 判斷方向
+            if(!derection_judger->isDerectionJudged()){
+                RCLCPP_WARN(node.get_logger(), "Direction Judging ...");
+                /// 更新世界坐標系下的yaw角和距離
+                derection_judger->updateWorldPYD(min_pitch_armor->pyd.pitch, min_pitch_armor->pyd.yaw, min_pitch_armor->pyd.distance);
+            }
+            if(derection_judger->isDerectionJudged()){
+                RCLCPP_WARN(node.get_logger(), "Direction Judged");
+                if(!outpost_predictor->is_initialized) { // 初始化
+                    RCLCPP_WARN(node.get_logger(), "OutpostHitterNode> Initializing outpost predictor.");
+                    outpost_predictor->initPredictor(*(min_pitch_armor), derection_judger->getDirection());
+                    last_time_stamp = stamp;
+                } else { // 量測更新
+                    RCLCPP_WARN(node.get_logger(), "OutpostHitterNode> Running outpost predictor.");
+                    
+                    // [ROS 2] Duration API 變更: toSec() -> seconds()
+                    int delta_time = static_cast<int>((stamp - last_time_stamp).seconds());
+                    last_time_stamp = stamp;
+                    outpost_info = outpost_predictor->runPredictor(delta_time, *(min_pitch_armor), USE_MEASURE_UPDATE);
+
+                    RCLCPP_WARN(node.get_logger(), "Predicted Outpost outpost_theta: %f ",outpost_info.outpost_theta);
+                    RCLCPP_WARN(node.get_logger(), "Predicted Outpost outpost_omega: %f ",outpost_info.outpost_omega);
+                    
+                    if (!outpost_info.is_valid) {
+                        RCLCPP_WARN(node.get_logger(), "OutpostHitterNode> Outpost info is not valid.");
+                        return;
+                    }
+                }
+            } else {
+                RCLCPP_WARN(node.get_logger(), "Dierection Judging ...");
+                return;
+            }
+            
+            RCLCPP_INFO(node.get_logger(), "######2");
+
+            // ** 步驟四：計算角度 **
+            muzzle_solver->setBulletSpeed(23.0);
+
+            CONTROLLER::BoardInformations board_info = muzzle_solver->solveMuzzle(outpost_info);
+
+            if(board_info.size()==0) return ;
+
+            RCLCPP_INFO(node.get_logger(), "########3");
+            auto best_board = board_selector->selectBestBoard(board_info);
+            RCLCPP_INFO(node.get_logger(), "########4");
+            double pitch_setpoint = best_board.aim_pitch;
+            pitch_setpoint *= 180 / M_PI;
+            pitch_setpoint -= 2.0; // 需要減去2度的偏差
+            double yaw_setpoint = best_board.aim_yaw;
+            yaw_setpoint *= 180 / M_PI;
+            yaw_setpoint = (float)(yaw_setpoint + std::round((yaw_now - yaw_setpoint) / 360.0) * 360.0);
+            RCLCPP_INFO(node.get_logger(), "#######5");
+            if(yaw_setpoint - yaw_now > 80 || yaw_setpoint - yaw_now < -80){
+                // roslog::warn("OutpostHitterNode> Yaw setpoint is too far from current yaw, skipping.");
+                return;
+            }
+
+            // ** 步驟五: 發布消息 **
+            auto_aim_common::msg::Target target_msg;
+            target_msg.header.stamp = stamp;
+            target_msg.yaw = yaw_setpoint;
+            target_msg.pitch = pitch_setpoint;
+            
+            // [ROS 2] 修正 publish 調用方式: 指針 -> 用箭頭
+            node.Publisher<ly_outpost_target>()->publish(target_msg);
+        }
+
+        // [關鍵] 公開 node 成員，以便 main 函數可以獲取它來進行 spin
+        // 因為 LangYa::ROSNode 繼承自 rclcpp::Node
+        LangYa::ROSNode<AppName> node;
+
+    private:
+        // [ROS 2] 修正參數類型為 ConstSharedPtr
+        void convertToDetections(const auto_aim_common::msg::Armors::ConstSharedPtr msg, Detections& detections) {
+            detections.clear();
+            detections.reserve(msg->armors.size());
+            for (const auto& armor : msg->armors) {
+                if(armor.type != 7) continue; /// 需要判斷這個是否已經被過濾了
+                /// 需要進一步判斷是否對應的上，感覺對不上的樣子
+                double angle1 = atan2(armor.corners_y[3] - armor.corners_y[1], armor.corners_x[0] - armor.corners_x[3]);
+                double angle2 = atan2(armor.corners_y[2] - armor.corners_y[0], armor.corners_x[1] - armor.corners_x[2]);
+                if(abs(angle1 - M_PI/2) >= M_PI/6 || abs(angle2 - M_PI/2) >= M_PI/6) continue;
+                detections.emplace_back(Detection{
+                    .tag_id = armor.type,  // C++20 
+                    .corners = {
+                        {armor.corners_x[0], armor.corners_y[0]},
+                        {armor.corners_x[1], armor.corners_y[1]},
+                        {armor.corners_x[2], armor.corners_y[2]},
+                        {armor.corners_x[3], armor.corners_y[3]}
+                    }
+                });
+            }
+        }
+
+        std::unique_ptr<SOLVER::PoseSolver> solver;
+        std::unique_ptr<PREDICTOR::OutpostPredictor> outpost_predictor;
+        std::unique_ptr<PREDICTOR::DirectionJudger> derection_judger;
+        std::unique_ptr<PREDICTOR::TopFilter> top_filter;
+        std::unique_ptr<CONTROLLER::MuzzleSolver> muzzle_solver;
+        std::unique_ptr<CONTROLLER::BoardSelector> board_selector;
+        rclcpp::Time last_time_stamp;
+    };
+} // namespace
+
+int main(int argc, char** argv){
+    // 1. 初始化 ROS 2
+    rclcpp::init(argc, argv);
+
+    // 2. 創建我們封裝的業務類
+    // 注意：OutpostHitterNode 的構造函數裡初始化了 LangYa::ROSNode (繼承自 rclcpp::Node)
+    auto app = std::make_shared<OutpostHitterNode>();
+
+    // 3. [關鍵] 獲取底層的 rclcpp::Node 指針
+    // 這樣我們可以把它傳給 SOLVER 全局變量，也可以用來 spin
+    // 這裡使用 "空刪除器 (Aliasing Constructor)" 技巧，創建一個指向成員變量的 shared_ptr
+    std::shared_ptr<rclcpp::Node> node_ptr(&app->node, [](auto*){});
+
+    // 4. [必做] 設置 SOLVER 的全局指針
+    // 確保 PoseSolver::PoseSolver() 能拿到節點
+    SOLVER::global_solver_node = node_ptr;
+
+    // 5. 運行
+    rclcpp::spin(node_ptr);
+    
+    rclcpp::shutdown();
+    return 0;
+}

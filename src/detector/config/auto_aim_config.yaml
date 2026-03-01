@@ -1,0 +1,111 @@
+# ==========================================================
+# ROS 2 全域參數檔 (Wildcard Version)
+# 核心魔法：使用 /** 讓所有節點都能讀取同一份參數
+# ==========================================================
+/**:
+  ros__parameters:
+    # ----------------------------------------------------
+    # 1. Detector 專用配置 (保留斜線格式以相容舊代碼)
+    # ----------------------------------------------------
+    # 相机参数
+    "camera_param/camera_sn": "KE0200060396"
+    "camera_param/ExposureTime": 5000.0
+    "camera_param/Gain": 16.0
+    "camera_param/RedBalanceRatio": 1.2266
+    "camera_param/GreenBalanceRatio": 1.0
+    "camera_param/BlueBalanceRatio": 1.3711
+    # WhiteBalance: 4000
+
+
+    # detector模块调试配置
+    # 路徑使用相對路徑 (請在 workspace 根目錄執行)
+    "detector_config/classifier_path": "src/detector/Extras/classifier.xml"
+    "detector_config/detector_path": "src/detector/Extras/armor_detector_model.xml"
+    "detector_config/car_model_path": "src/detector/Extras/car_detector_model.xml"
+    "detector_config/video_path": "src/record/record.mkv" # 视频路径
+
+    # 是否开启调试模式
+    "detector_config/debug_mode": false
+    # 關鍵修正：設為 true 以便在測試影片中能看到藍色裝甲板 (根據你的反饋)
+    "detector_config/debug_team_blue": false 
+    
+    # 图像是否显示（通过网页端实现 可以观察local_ip:8001/stream）
+    "detector_config/web_show": true
+    "detector_config/show": false       # 是否发布相机话题 pub_image 打符的时候一定要开 (RQT看圖要開這個)
+    "detector_config/draw": true        # 是否开启绘制 (畫框框)
+    "detector_config/use_ros_bag": false
+    "detector_config/save_video": false # 是否开启保存视频（内录）- 这个暂时还用不了
+    "detector_config/use_video": false   # 是否使用视频作为图像源 (本地測試設為 true)
+
+    # ----------------------------------------------------
+    # 2. Solver 配置 (雙重相容區)
+    # Predictor 需要點 (.)，Detector 需要斜線 (/)
+    # ----------------------------------------------------
+    #  相机坐标系：       装甲板坐标系：     世界坐标系:
+    #         z   x           y             和相机坐标系一致
+    #         |  /\           ^
+    #         ^  /            |
+    #         | /             |
+    #  y <----o/              o----> x
+    
+    # 這裡使用 "縮排結構"，ROS 2 會自動解析為點 (.)
+    # 給 Predictor 用： solver_config.camera_intrinsic_matrix
+    solver_config:
+      camera_offset: [0.0, 0.0, 52.6] # 相机到枪口的偏移(单位: mm)
+      # camera_rotation: [0.0, 3.5, -0.5]  # 相机旋转角度(单位: °)-> roll pitch yaw  高打低情况下
+      camera_rotation: [0.0, 3.3, 0.0]     # 相机旋转角度(单位: °)-> roll pitch yaw  水平情况下如此
+      camera_intrinsic_matrix: [
+        1331.1, 0.0, 624.5817,
+        0.0, 1330.1, 526.3662,
+        0.0, 0.0, 1.0
+      ]
+      camera_distortion_coefficients: [
+        -0.1059, -0.3427, 0.0072, 0.0, 1.4125
+      ]
+
+    # 為了相容 Detector (如果它硬要找斜線)，我們必須"重複"宣告一次帶斜線的 key
+    # 給 Detector 用： solver_config/camera_intrinsic_matrix
+    "solver_config/camera_offset": [0.0, 0.0, 52.6]
+    "solver_config/camera_rotation": [0.0, 3.3, 0.0]
+    "solver_config/camera_intrinsic_matrix": [1331.1, 0.0, 624.5817, 0.0, 1330.1, 526.3662, 0.0, 0.0, 1.0]
+    "solver_config/camera_distortion_coefficients": [-0.1059, -0.3427, 0.0072, 0.0, 1.4125]
+
+    # ----------------------------------------------------
+    # 3. Controller 配置
+    # ----------------------------------------------------
+    # 自動解析為 controller_config.bullet_speed
+    controller_config:
+      bullet_speed: 23.0  # 子弹速度(单位: m/s)
+      shoot_delay: 0.02   # 预测延迟
+      
+      # 射擊補償表
+      shoot_table_adjust:
+        enable: true
+        pitch:
+          intercept: 0.5  # 偏移量(单位: °)
+          coef_z: 0.0     # z轴系数
+          coef_d: 0.0     # 距离系数
+          coef_z2: 0.0
+          coef_zd: 0.0
+          coef_d2: 0.3
+        yaw:
+          intercept: 0.0  # 偏移量(单位: °)
+          coef_z: 0.0     # z轴系数
+          coef_d: 0.0     # 距离系数
+          coef_z2: 0.0
+          coef_zd: 0.0
+          coef_d2: 0.5
+
+    # ----------------------------------------------------
+    # 4. 測試模式配置
+    # ----------------------------------------------------
+    test_mode:
+      enable: false  # 設為 true 啟用"看到就打"測試模式，false 則等待 behavior_tree 決策
+
+    # ----------------------------------------------------
+    # 5. IO 配置
+    # ----------------------------------------------------
+    io_config:
+      use_virtual_device: false        # 是否使用虚拟设备 (本地測試設為 true)
+      device_name: "/dev/ttyACM0"     # 記得加上這個，不然 Gimbal 會報錯
+      baud_rate: 115200 
