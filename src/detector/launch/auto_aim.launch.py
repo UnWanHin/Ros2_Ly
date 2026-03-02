@@ -2,10 +2,14 @@
 import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
-    home_dir = os.environ['HOME']
-    config_file = os.path.join(home_dir, 'ros2_ly_ws/src/detector/config/auto_aim_config.yaml')
+    config_file = os.path.join(
+        get_package_share_directory('detector'),
+        'config',
+        'auto_aim_config.yaml'
+    )
     
     print(f"\033[92m[自瞄模式] 載入配置: {config_file}\033[0m")
     

@@ -406,7 +406,10 @@ namespace LangYa {
 
         bool IsInitialized() const noexcept
         {
-            return DeviceHandle == nullptr;
+            if (Mode == CaptureMode::VideoFile) {
+                return VideoCap.isOpened();
+            }
+            return DeviceHandle != nullptr;
         }
 
         // this function do not check if this instance is initialized
@@ -436,8 +439,7 @@ namespace LangYa {
                 return false;
             }
 
-            auto i = frame_count - 1;
-            for (; i >= 0; i--) {
+            for (int i = static_cast<int>(frame_count) - 1; i >= 0; --i) {
                 const auto& buffer = DeviceFrameBuffers[i];
                 if (buffer == nullptr || buffer->nStatus != GX_FRAME_STATUS_SUCCESS){
                     roslog::error("Camera::GetImage: the image at {} is failed to capture", i);

@@ -6,13 +6,16 @@
 #include <RosTools/RosTools.hpp>
 
 #include <thread>
+#include <chrono>
 #include <iostream> 
+#include <filesystem>
 
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/int32.hpp>
 #include <std_msgs/msg/u_int8.hpp>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include <boost/lockfree/stack.hpp>
 #include <boost/atomic.hpp>
@@ -54,6 +57,7 @@ bool save_video = false;
 bool use_video = false;
 bool use_ros_bag = false;
 std::string video_path;
+std::string camera_sn = "KE0200060396";
 
 /// 宏常量与状态量
 std::atomic_bool myTeamRed{false};
@@ -136,6 +140,7 @@ void InitialParam(){
     global_node->GetParam<bool>("detector_config/use_video", use_video, false);
     global_node->GetParam<bool>("detector_config/use_ros_bag", use_ros_bag, false);
     global_node->GetParam<std::string>("detector_config/video_path", video_path, "");
+    global_node->GetParam<std::string>("camera_param/camera_sn", camera_sn, "KE0200060396");
 }
 
 void ConfigureCamera() {
@@ -148,6 +153,33 @@ void ConfigureCamera() {
     global_node->GetParam<double>("camera_param/RedBalanceRatio", config.RedBalanceRatio.Value, 1.2266f);
     global_node->GetParam<double>("camera_param/GreenBalanceRatio", config.GreenBalanceRatio.Value, 1.0f);
     global_node->GetParam<double>("camera_param/BlueBalanceRatio", config.BlueBalanceRatio.Value, 1.3711f);
+}
+
+std::string ResolvePathFromDetectorShare(const std::string& configured_path,
+                                         const std::string& detector_share_dir) {
+    namespace fs = std::filesystem;
+    if (configured_path.empty()) {
+        return configured_path;
+    }
+
+    fs::path raw(configured_path);
+    if (fs::exists(raw)) {
+        return fs::absolute(raw).string();
+    }
+    if (raw.is_absolute()) {
+        return configured_path;
+    }
+
+    const fs::path from_share = fs::path(detector_share_dir) / raw;
+    if (fs::exists(from_share)) {
+        return from_share.string();
+    }
+
+    const fs::path from_extras = fs::path(detector_share_dir) / "Extras" / raw.filename();
+    if (fs::exists(from_extras)) {
+        return from_extras.string();
+    }
+    return configured_path;
 }
 
 
@@ -275,7 +307,10 @@ void ImageLoop() {
                         // 如果讀不到 (影片播完了)，嘗試重置
                         if(use_video && !video_path.empty()){
                              std::cout << "[DEBUG] Video ended. Replaying..." << std::endl;
-                             Cam.Initialize(video_path);
+                             if (!Cam.Initialize(video_path)) {
+                                 std::cerr << "[ERROR] Failed to reopen video: " << video_path << std::endl;
+                                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                             }
                         }
                         continue; 
                     }
@@ -381,6 +416,13 @@ int main(int argc, char **argv) try {
     rclcpp::init(argc, argv);
 
     global_node = std::make_shared<ROSNode<AppName>>();
+    std::string detector_share_dir;
+    try {
+        detector_share_dir = ament_index_cpp::get_package_share_directory("detector");
+    } catch (const std::exception& e) {
+        std::cerr << "[ERROR] Cannot find detector package share directory: " << e.what() << std::endl;
+        return -1;
+    }
 
     std::string classifier_path;
     std::string detector_path;
@@ -395,12 +437,18 @@ int main(int argc, char **argv) try {
             std::cout << "[DEBUG] Opening Video: " << video_path << std::endl;
             if(video_path.empty()){
                 std::cerr << "[ERROR] Video path is empty! Check your YAML file." << std::endl;
-                // return -1; // 這裡可以選擇報錯退出，或者讓 Cam.Initialize 處理
+                return -1;
             }
-            Cam.Initialize(video_path);
+            if (!Cam.Initialize(video_path)) {
+                std::cerr << "[ERROR] Failed to initialize video source: " << video_path << std::endl;
+                return -1;
+            }
         } else {
             ConfigureCamera();
-            Cam.Initialize("", "KE0200060396");
+            if (!Cam.Initialize("", camera_sn)) {
+                std::cerr << "[ERROR] Failed to initialize camera with SN: " << camera_sn << std::endl;
+                return -1;
+            }
         }
     }
 
@@ -416,6 +464,28 @@ int main(int argc, char **argv) try {
     global_node->GetParam<std::string>("detector_config/classifier_path", classifier_path, "");
     global_node->GetParam<std::string>("detector_config/detector_path", detector_path, "");    
     global_node->GetParam<std::string>("detector_config/car_model_path", car_model_path, "");
+
+    classifier_path = ResolvePathFromDetectorShare(classifier_path, detector_share_dir);
+    detector_path = ResolvePathFromDetectorShare(detector_path, detector_share_dir);
+    car_model_path = ResolvePathFromDetectorShare(car_model_path, detector_share_dir);
+
+    auto ensure_path_exists = [](const char* label, const std::string& path) -> bool {
+        if (path.empty()) {
+            std::cerr << "[ERROR] " << label << " path is empty" << std::endl;
+            return false;
+        }
+        if (!std::filesystem::exists(path)) {
+            std::cerr << "[ERROR] " << label << " path does not exist: " << path << std::endl;
+            return false;
+        }
+        return true;
+    };
+
+    if (!ensure_path_exists("Classifier", classifier_path) ||
+        !ensure_path_exists("Detector", detector_path) ||
+        !ensure_path_exists("CarModel", car_model_path)) {
+        return -1;
+    }
     
     std::cout << "[DEBUG] Loading Classifier: " << classifier_path << std::endl;
     if (!carAndArmorDetector.armorDetector.Corrector.Classifier.LoadModel(classifier_path)) return -1;

@@ -60,6 +60,18 @@ namespace BehaviorTree{
             app.extEventData = msg->data;
         });
 
+        // 兼容历史 topic（无前导 '/'）:
+        // gimbal_driver 旧版本可能发布到 "ly/gimbal/eventdata"。
+        // 为避免链路断开，这里额外订阅一次，统一写入同一变量。
+        auto legacy_game_event_sub = node_->create_subscription<std_msgs::msg::UInt32>(
+            "ly/gimbal/eventdata",
+            rclcpp::QoS(10),
+            [this](const std_msgs::msg::UInt32::SharedPtr msg) {
+                extEventData = msg->data;
+            }
+        );
+        subscribers_.push_back(legacy_game_event_sub);
+
         // ly_me_is_team_red
         GenSub<ly_me_is_team_red>([](Application& app, auto msg) {
             app.team = msg->data ? UnitTeam::Red : UnitTeam::Blue;
