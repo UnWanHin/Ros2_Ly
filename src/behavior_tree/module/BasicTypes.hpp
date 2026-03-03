@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <array>
 #include <numbers>
+#include <vector>
 
 #pragma region Enums
 namespace LangYa
@@ -382,12 +383,26 @@ namespace LangYa
         bool UseXY;
     };
 
+    // 姿态模块配置
+    struct PostureSetting {
+        bool Enable{true};
+        int SwitchCooldownSec{5};     // 规则: 姿态切换冷却
+        int MaxSinglePostureSec{180}; // 规则: 单姿态累计超过该值会降档
+        int EarlyRotateSec{165};      // 接近降档前提前轮换
+        int MinHoldSec{10};           // 防抖: 最短保持时间
+        int PendingAckTimeoutMs{600}; // 等待回读超时
+        int RetryIntervalMs{300};     // 重试间隔
+        int MaxRetryCount{3};         // 最大重试次数
+        bool OptimisticAck{true};     // 回读缺失时是否乐观确认
+    };
+
     // Main
     struct Config {
         AimDebug AimDebugSettings;
         Rate RateSettings;
         GameStrategy GameStrategySettings;
         NaviSetting NaviSettings;
+        PostureSetting PostureSettings;
         int ScanCounter;  /// 扫描模式计数器，一定值后Yaw动一次
     };
 

@@ -30,6 +30,7 @@
 #include "Node.hpp"
 #include "Topic.hpp"
 #include "Robot.hpp"
+#include "PostureManager.hpp"
 
 using namespace BT;
 using namespace LangYa;
@@ -141,6 +142,7 @@ private:
     std::shared_ptr<Logger> LoggerPtr; // 日志
 
     Config config{}; // 配置文件
+    PostureManager postureManager_{};
 
     RateClock fireRateClock{20}, treeTickRateClock{100}, naviCommandRateClock{2}; // 频率控制
     TimerClock rotateTimerClock{Seconds{2}}; // 旋转时间
@@ -254,6 +256,8 @@ public:
     void SetAimTargetNormal();
     void SetAimMode();
     void CheckDebug();
+    void UpdatePostureCommand(bool has_target);
+    SentryPosture SelectDesiredPosture(bool has_target) const;
 
     // 行为树初始化
     bool LoadBehaviorTree() noexcept;
@@ -286,6 +290,9 @@ public:
     std::vector<UnitType> GetHitableTargetsCopy() const { return hitableTargets; }
     std::vector<UnitType> GetReliableEnemyPositionsCopy() const { return reliableEnemyPosuition; }
     ArmorData GetTargetArmorCopy() const { return targetArmor; }
+    std::uint8_t GetPostureCommand() const noexcept { return postureCommand; }
+    std::uint8_t GetPostureState() const noexcept { return postureState; }
+    const PostureRuntime& GetPostureRuntime() const noexcept { return postureManager_.Runtime(); }
 
     Application(int argc, char **argv);
     ~Application();

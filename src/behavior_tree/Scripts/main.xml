@@ -8,6 +8,7 @@
       <SubTree ID="StrategyDispatch"/>
       <PreprocessData/>
       <SelectAimTarget/>
+      <SelectPosture/>
       <PublishAll/>
     </Sequence>
   </BehaviorTree>
@@ -60,6 +61,7 @@
     <Action ID="ExecuteNaviTestStrategy"/>
     <Action ID="PreprocessData"/>
     <Action ID="SelectAimTarget"/>
+    <Action ID="SelectPosture"/>
     <Action ID="PublishAll"/>
 
     <Condition ID="CheckNeedRecovery"/>

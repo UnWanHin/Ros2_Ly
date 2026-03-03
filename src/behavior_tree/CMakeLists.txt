@@ -35,7 +35,7 @@ endif()
 # 3. 編譯可執行檔 (Build Executable)
 # =========================================
 # 自動抓取 src 下所有 .cpp 以及根目錄的 main.cpp
-file(GLOB_RECURSE SRC_FILES "src/*.cpp")
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "src/*.cpp")
 
 add_executable(${PROJECT_NAME}_node 
   main.cpp

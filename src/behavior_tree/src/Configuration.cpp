@@ -29,12 +29,27 @@ namespace LangYa {
         j.at("UseXY").get_to(ns.UseXY);
     }
 
+    void from_json(const json& j, PostureSetting& ps) {
+        ps.Enable = j.value("Enable", ps.Enable);
+        ps.SwitchCooldownSec = j.value("SwitchCooldownSec", ps.SwitchCooldownSec);
+        ps.MaxSinglePostureSec = j.value("MaxSinglePostureSec", ps.MaxSinglePostureSec);
+        ps.EarlyRotateSec = j.value("EarlyRotateSec", ps.EarlyRotateSec);
+        ps.MinHoldSec = j.value("MinHoldSec", ps.MinHoldSec);
+        ps.PendingAckTimeoutMs = j.value("PendingAckTimeoutMs", ps.PendingAckTimeoutMs);
+        ps.RetryIntervalMs = j.value("RetryIntervalMs", ps.RetryIntervalMs);
+        ps.MaxRetryCount = j.value("MaxRetryCount", ps.MaxRetryCount);
+        ps.OptimisticAck = j.value("OptimisticAck", ps.OptimisticAck);
+    }
+
     void from_json(const json& j, Config& c) {
         j.at("AimDebug").get_to(c.AimDebugSettings);
         j.at("Rate").get_to(c.RateSettings);
         j.at("GameStrategy").get_to(c.GameStrategySettings);
         j.at("ScanCounter").get_to(c.ScanCounter);
         j.at("NaviSetting").get_to(c.NaviSettings);
+        if (j.contains("Posture")) {
+            j.at("Posture").get_to(c.PostureSettings);
+        }
     }
 }
 
@@ -74,6 +89,16 @@ namespace BehaviorTree {
         LoggerPtr->Debug("Protected: {}", config.GameStrategySettings.Protected);
         LoggerPtr->Debug("------ NaviSetting ------");
         LoggerPtr->Debug("UseXY: {}", config.NaviSettings.UseXY);
+        LoggerPtr->Debug("------ PostureSetting ------");
+        LoggerPtr->Debug("Enable: {}", config.PostureSettings.Enable);
+        LoggerPtr->Debug("SwitchCooldownSec: {}", config.PostureSettings.SwitchCooldownSec);
+        LoggerPtr->Debug("MaxSinglePostureSec: {}", config.PostureSettings.MaxSinglePostureSec);
+        LoggerPtr->Debug("EarlyRotateSec: {}", config.PostureSettings.EarlyRotateSec);
+        LoggerPtr->Debug("MinHoldSec: {}", config.PostureSettings.MinHoldSec);
+        LoggerPtr->Debug("PendingAckTimeoutMs: {}", config.PostureSettings.PendingAckTimeoutMs);
+        LoggerPtr->Debug("RetryIntervalMs: {}", config.PostureSettings.RetryIntervalMs);
+        LoggerPtr->Debug("MaxRetryCount: {}", config.PostureSettings.MaxRetryCount);
+        LoggerPtr->Debug("OptimisticAck: {}", config.PostureSettings.OptimisticAck);
         LoggerPtr->Debug("------ End ------");
         LoggerPtr->Debug("Configuration completed.");
         fireRateClock.reset(config.RateSettings.FireRate);
@@ -91,6 +116,10 @@ namespace BehaviorTree {
             strategyMode_ = StrategyMode::HitHero;
         }
         LoggerPtr->Info("Initial StrategyMode: {}", StrategyModeToString(strategyMode_));
+
+        postureManager_.Configure(config.PostureSettings);
+        postureManager_.Reset(std::chrono::steady_clock::now(), SentryPosture::Move);
+
         return true;
     }
 }

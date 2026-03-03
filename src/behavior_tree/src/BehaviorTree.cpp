@@ -57,6 +57,7 @@ bool Application::RegisterTreeNodes() {
         REGISTER_APP_NODE(ExecuteNaviTestStrategyNode, "ExecuteNaviTestStrategy");
         REGISTER_APP_NODE(PreprocessDataNode, "PreprocessData");
         REGISTER_APP_NODE(SelectAimTargetNode, "SelectAimTarget");
+        REGISTER_APP_NODE(SelectPostureNode, "SelectPosture");
         REGISTER_APP_NODE(PublishAllNode, "PublishAll");
 
 #undef REGISTER_APP_NODE

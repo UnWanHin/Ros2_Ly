@@ -54,6 +54,7 @@
 | `behavior_tree` | [behavior_tree.md](behavior_tree.md) | 決策中心：匯總所有數據，控制模式切換和雲台指令 |
 | `sentry_manual` | [sentry_decision_autoaim_manual.md](sentry_decision_autoaim_manual.md) | 交接手冊：當前決策流程、SetPosition說明、輔瞄調參與鏈路自檢 |
 | `sentry_posture_change` | [sentry_posture_interface_change_2026-03-03.md](sentry_posture_interface_change_2026-03-03.md) | 哨兵姿態接口改造記錄：Topic 契約、代碼改動、下位機對接事項 |
+| `sentry_posture_system` | [sentry_posture_system.md](sentry_posture_system.md) | 哨兵姿態狀態機設計：計時、冷卻、防死鎖、BT 接入與調試 |
 | `outpost_hitter` | [outpost_hitter.md](outpost_hitter.md) | 前哨站專用打擊節點（旋轉預測+打擊時機選擇） |
 | `buff_hitter` | [buff_hitter.md](buff_hitter.md) | 能量機關（打符）識別與瞄準節點 |
 | `record` | [record.md](record.md) | 錄像和射擊表CSV數據存儲目錄（非ROS節點） |

@@ -287,6 +287,31 @@ public:
     }
 };
 
+class SelectPostureNode : public AppSyncActionNode {
+public:
+    SelectPostureNode(const std::string& name, const BT::NodeConfig& config, Application* app)
+        : AppSyncActionNode(name, config, app) {}
+
+    static BT::PortsList providedPorts() { return {}; }
+
+    BT::NodeStatus tick() override {
+        bool has_target = false;
+        const auto global_board = app_->GetGlobalBlackboard();
+        if (global_board) {
+            (void)global_board->get("IsFindTarget", has_target);
+        }
+
+        app_->UpdatePostureCommand(has_target);
+
+        const auto tick_board = app_->GetTickBlackboard();
+        if (tick_board) {
+            tick_board->set("PostureCommand", app_->GetPostureCommand());
+            tick_board->set("PostureState", app_->GetPostureState());
+        }
+        return BT::NodeStatus::SUCCESS;
+    }
+};
+
 class PublishAllNode : public AppSyncActionNode {
 public:
     PublishAllNode(const std::string& name, const BT::NodeConfig& config, Application* app)

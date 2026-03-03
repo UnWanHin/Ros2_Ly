@@ -22,5 +22,16 @@
     "NaviSetting" : {
         "UseXY": true
     },
+    "Posture" : {
+        "Enable": true,
+        "SwitchCooldownSec": 5,
+        "MaxSinglePostureSec": 180,
+        "EarlyRotateSec": 165,
+        "MinHoldSec": 10,
+        "PendingAckTimeoutMs": 600,
+        "RetryIntervalMs": 300,
+        "MaxRetryCount": 3,
+        "OptimisticAck": true
+    },
     "ScanCounter" : 1
 }

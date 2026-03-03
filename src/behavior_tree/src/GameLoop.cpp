@@ -47,6 +47,8 @@ namespace BehaviorTree {
         GlobalBlackboard_->set<std::uint8_t>("StrategyMode", static_cast<std::uint8_t>(strategyMode_));
         GlobalBlackboard_->set<std::chrono::steady_clock::time_point>("GameStartTime", gameStartTime);
         GlobalBlackboard_->set<bool>("IsFindTarget", IsFindTarget);
+        GlobalBlackboard_->set<std::uint8_t>("PostureState", postureState);
+        GlobalBlackboard_->set<std::uint8_t>("PostureCommand", postureCommand);
         
         LoggerPtr->Info("-------- update blackboard ----------");
         LoggerPtr->Info("TimeLeft: {}", timeLeft);
