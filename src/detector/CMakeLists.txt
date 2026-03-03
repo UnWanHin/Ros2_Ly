@@ -129,6 +129,12 @@ install(PROGRAMS
   RENAME mapper_node
 )
 
+install(PROGRAMS
+  script/fire_flip_test.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME fire_flip_test
+)
+
 install(DIRECTORY include/
     DESTINATION include
 )
