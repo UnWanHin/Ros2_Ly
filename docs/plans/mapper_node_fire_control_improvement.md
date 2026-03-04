@@ -3,7 +3,7 @@
 ## 1. 需求分析
 
 ### 当前状态
-[`mapper_node.py`](../src/detector/script/mapper_node.py:1) 目前功能：
+[`mapper_node.py`](../../src/detector/script/mapper_node.py:1) 目前功能：
 - 订阅 `/ly/predictor/target` 话题，接收目标信息
 - 发布 `/ly/control/angles` 话题，映射云台角度
 - 发布 `/ly/me/is_team_red` 话题，发布队伍颜色
@@ -18,7 +18,7 @@
 
 ### 参考实现：shooting_table_node.cpp
 
-从 [`shooting_table_node.cpp`](../src/shooting_table_calib/shooting_table_node.cpp:232) 中提取的核心火控逻辑：
+从 [`shooting_table_node.cpp`](../../src/shooting_table_calib/shooting_table_node.cpp:232) 中提取的核心火控逻辑：
 
 ```cpp
 // 火控数据结构
@@ -101,7 +101,7 @@ class FireControl:
 ```
 
 #### 目标状态跟踪
-- 监听 [`Target`](../src/auto_aim_common/msg/Target.msg:1) 消息的 `status` 字段
+- 监听 [`Target`](../../src/auto_aim_common/msg/Target.msg:1) 消息的 `status` 字段
 - 当 `status=True` 时表示有目标，触发开火
 - 当 `status=False` 时表示无目标，停止开火
 
@@ -149,7 +149,7 @@ graph TD
 ## 4. 实现步骤
 
 ### 步骤 1：添加火控发布者
-在 [`TargetToGimbalNode.__init__()`](../src/detector/script/mapper_node.py:10) 中添加：
+在 [`TargetToGimbalNode.__init__()`](../../src/detector/script/mapper_node.py:10) 中添加：
 ```python
 self.firecode_pub = self.create_publisher(UInt8, '/ly/control/firecode', 10)
 ```
@@ -166,7 +166,7 @@ self.auto_fire = auto_fire
 ```
 
 ### 步骤 3：修改 target_callback
-在 [`target_callback()`](../src/detector/script/mapper_node.py:42) 中添加火控逻辑：
+在 [`target_callback()`](../../src/detector/script/mapper_node.py:42) 中添加火控逻辑：
 ```python
 def target_callback(self, msg: Target):
     # 映射云台角度
@@ -199,7 +199,7 @@ def target_callback(self, msg: Target):
 ```
 
 ### 步骤 4：添加命令行参数
-在 [`main()`](../src/detector/script/mapper_node.py:63) 中添加：
+在 [`main()`](../../src/detector/script/mapper_node.py:63) 中添加：
 ```python
 parser.add_argument(
     '--enable-fire',
@@ -313,7 +313,7 @@ Node(
 ```
 
 ### 7.2 文档更新
-更新 [`mapper_node.py`](../src/detector/script/mapper_node.py:1) 的文档字符串，说明：
+更新 [`mapper_node.py`](../../src/detector/script/mapper_node.py:1) 的文档字符串，说明：
 - 新增的火控功能
 - 命令行参数说明
 - 火控逻辑的工作原理
@@ -331,7 +331,7 @@ Node(
 
 ## 9. 总结
 
-本改进方案参考 [`shooting_table_calib`](../src/shooting_table_calib/shooting_table_node.cpp:1) 的火控逻辑，为 [`mapper_node.py`](../src/detector/script/mapper_node.py:1) 添加完整的火控功能：
+本改进方案参考 [`shooting_table_calib`](../../src/shooting_table_calib/shooting_table_node.cpp:1) 的火控逻辑，为 [`mapper_node.py`](../../src/detector/script/mapper_node.py:1) 添加完整的火控功能：
 
 ✅ **核心功能**：
 - 火控状态管理（0b00 ↔ 0b11 翻转）

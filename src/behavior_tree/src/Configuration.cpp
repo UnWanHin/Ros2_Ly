@@ -39,6 +39,12 @@ namespace LangYa {
         ps.RetryIntervalMs = j.value("RetryIntervalMs", ps.RetryIntervalMs);
         ps.MaxRetryCount = j.value("MaxRetryCount", ps.MaxRetryCount);
         ps.OptimisticAck = j.value("OptimisticAck", ps.OptimisticAck);
+        ps.TargetKeepMs = j.value("TargetKeepMs", ps.TargetKeepMs);
+        ps.DamageKeepSec = j.value("DamageKeepSec", ps.DamageKeepSec);
+        ps.LowHealthThreshold = j.value("LowHealthThreshold", ps.LowHealthThreshold);
+        ps.VeryLowHealthThreshold = j.value("VeryLowHealthThreshold", ps.VeryLowHealthThreshold);
+        ps.LowAmmoThreshold = j.value("LowAmmoThreshold", ps.LowAmmoThreshold);
+        ps.ScoreHysteresis = j.value("ScoreHysteresis", ps.ScoreHysteresis);
     }
 
     void from_json(const json& j, Config& c) {
@@ -99,6 +105,12 @@ namespace BehaviorTree {
         LoggerPtr->Debug("RetryIntervalMs: {}", config.PostureSettings.RetryIntervalMs);
         LoggerPtr->Debug("MaxRetryCount: {}", config.PostureSettings.MaxRetryCount);
         LoggerPtr->Debug("OptimisticAck: {}", config.PostureSettings.OptimisticAck);
+        LoggerPtr->Debug("TargetKeepMs: {}", config.PostureSettings.TargetKeepMs);
+        LoggerPtr->Debug("DamageKeepSec: {}", config.PostureSettings.DamageKeepSec);
+        LoggerPtr->Debug("LowHealthThreshold: {}", config.PostureSettings.LowHealthThreshold);
+        LoggerPtr->Debug("VeryLowHealthThreshold: {}", config.PostureSettings.VeryLowHealthThreshold);
+        LoggerPtr->Debug("LowAmmoThreshold: {}", config.PostureSettings.LowAmmoThreshold);
+        LoggerPtr->Debug("ScoreHysteresis: {}", config.PostureSettings.ScoreHysteresis);
         LoggerPtr->Debug("------ End ------");
         LoggerPtr->Debug("Configuration completed.");
         fireRateClock.reset(config.RateSettings.FireRate);

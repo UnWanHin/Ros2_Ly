@@ -48,6 +48,7 @@
 #include <iomanip>
 #include <ctime>
 #include <sstream>
+#include <initializer_list>
 
 using namespace ly_auto_aim;
 using namespace LangYa;
@@ -292,6 +293,29 @@ namespace {
             this->get_parameter(name, variable);
         }
 
+        template<typename T>
+        bool tryGetParamAny(const std::initializer_list<const char*>& names, T& variable) {
+            for (const auto* name : names) {
+                if (this->has_parameter(name) && this->get_parameter(name, variable)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        template<typename T>
+        void getParamCompat(const std::initializer_list<const char*>& names, T& variable, const T& default_value) {
+            if (tryGetParamAny(names, variable)) {
+                return;
+            }
+            const auto* primary = *names.begin();
+            if (!this->has_parameter(primary)) {
+                this->declare_parameter(primary, default_value);
+            }
+            this->get_parameter(primary, variable);
+            roslog::warn("Parameter '{}' missing, fallback default applied.", primary);
+        }
+
         void loadShootTableParams()
         {
             // 从config文件加载射击表参数
@@ -319,10 +343,12 @@ namespace {
         
         void initializeVideo()
         {
-            getParamSafe("detector_config.use_video", use_video, false);
+            getParamCompat<bool>({"detector_config.use_video", "detector_config/use_video"}, use_video, false);
             roslog::warn("use_video: {}", use_video);
-            getParamSafe("detector_config.use_ros_bag", use_ros_bag, false);
-            getParamSafe("detector_config.video_path", video_path, std::string(""));
+            getParamCompat<bool>({"detector_config.use_ros_bag", "detector_config/use_ros_bag"}, use_ros_bag, false);
+            getParamCompat<std::string>({"detector_config.video_path", "detector_config/video_path"}, video_path, std::string(""));
+            getParamCompat<bool>({"detector_config.web_show", "detector_config/web_show", "web_show"}, web_show, true);
+            getParamCompat<bool>({"detector_config.draw", "detector_config/draw", "draw_image"}, draw_image, true);
             
             if (use_video && !video_path.empty()) {
                 video_cap.open(video_path);
@@ -343,16 +369,20 @@ namespace {
             }
             
             std::string camera_sn;
-            getParamSafe("camera_param.camera_sn", camera_sn, std::string("KE0200060396"));
+            getParamCompat<std::string>({"camera_param.camera_sn", "camera_param/camera_sn"}, camera_sn, std::string(""));
+            if (camera_sn.empty()) {
+                roslog::error("camera_param.camera_sn (or camera_param/camera_sn) is empty");
+                throw std::runtime_error("Camera SN parameter is empty");
+            }
             
             auto &config = camera.Configure();
             config.AutoExposure.Value = GX_EXPOSURE_AUTO_OFF;
-            getParamSafe("camera_param.ExposureTime", config.ExposureTime.Value, 4000.0);
+            getParamCompat<double>({"camera_param.ExposureTime", "camera_param/ExposureTime"}, config.ExposureTime.Value, 4000.0);
             config.AutoGain.Value = GX_GAIN_AUTO_OFF;
-            getParamSafe("camera_param.Gain", config.Gain.Value, 12.0);
-            getParamSafe("camera_param.RedBalanceRatio", config.RedBalanceRatio.Value, 1.2266);
-            getParamSafe("camera_param.GreenBalanceRatio", config.GreenBalanceRatio.Value, 1.0);
-            getParamSafe("camera_param.BlueBalanceRatio", config.BlueBalanceRatio.Value, 1.3711);
+            getParamCompat<double>({"camera_param.Gain", "camera_param/Gain"}, config.Gain.Value, 12.0);
+            getParamCompat<double>({"camera_param.RedBalanceRatio", "camera_param/RedBalanceRatio"}, config.RedBalanceRatio.Value, 1.2266);
+            getParamCompat<double>({"camera_param.GreenBalanceRatio", "camera_param/GreenBalanceRatio"}, config.GreenBalanceRatio.Value, 1.0);
+            getParamCompat<double>({"camera_param.BlueBalanceRatio", "camera_param/BlueBalanceRatio"}, config.BlueBalanceRatio.Value, 1.3711);
             
             if (!camera.Initialize("", camera_sn)) {
                 roslog::error("Failed to initialize camera");
@@ -368,9 +398,9 @@ namespace {
             std::string detector_path;
             std::string car_model_path;
             
-            getParamSafe("detector_config.classifier_path", classifier_path, std::string(""));
-            getParamSafe("detector_config.detector_path", detector_path, std::string(""));
-            getParamSafe("detector_config.car_model_path", car_model_path, std::string(""));
+            getParamCompat<std::string>({"detector_config.classifier_path", "detector_config/classifier_path"}, classifier_path, std::string(""));
+            getParamCompat<std::string>({"detector_config.detector_path", "detector_config/detector_path"}, detector_path, std::string(""));
+            getParamCompat<std::string>({"detector_config.car_model_path", "detector_config/car_model_path"}, car_model_path, std::string(""));
             
             if (!carAndArmorDetector.armorDetector.Corrector.Classifier.LoadModel(classifier_path)) {
                 roslog::error("Failed to load classifier model: {}", classifier_path);
@@ -388,7 +418,7 @@ namespace {
             }
             
             // 设置队伍颜色
-            getParamSafe("detector_config.debug_team_blue", myTeamBlue, true);
+            getParamCompat<bool>({"detector_config.debug_team_blue", "detector_config/debug_team_blue"}, myTeamBlue, true);
             filter.is_team_red = !myTeamBlue;
 
             roslog::info("Detector modules initialized successfully");

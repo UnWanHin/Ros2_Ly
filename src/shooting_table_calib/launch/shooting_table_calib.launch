@@ -14,8 +14,8 @@
   <node pkg="shooting_table_calib" type="shooting_table_calib_node" name="shooting_table_calib" output="screen">
     <env name="ROS_LOG_DIR" value="$(env HOME)/workspace/logs/shooting_table_calib/log" />
     <rosparam>
-      # 相机参数
-      camera_sn: "KE0200060396"
+      # 相机序列号统一由 detector/config/auto_aim_config.yaml 管理，
+      # 避免在 launch 文件里出现硬编码 SN。
       camera_param:
         ExposureTime: 4000.0
         Gain: 12.0

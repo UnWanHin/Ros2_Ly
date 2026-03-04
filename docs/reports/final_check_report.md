@@ -60,7 +60,7 @@ buff_hitter → /ly/buff/target (發布)
 **修改命令：**
 ```bash
 sed -i 's/"detector_config\/use_video": true/"detector_config\/use_video": false/' \
-  ~/ros2_ly_ws/src/detector/config/auto_aim_config.yaml
+  ~/ros2_ly_ws_sentary/src/detector/config/auto_aim_config.yaml
 ```
 
 ---
@@ -74,7 +74,7 @@ sed -i 's/"detector_config\/use_video": true/"detector_config\/use_video": false
 
 **路徑使用：**
 ```python
-config_file = os.path.join(home_dir, 'ros2_ly_ws/src/detector/config/auto_aim_config.yaml')
+config_file = os.path.join(home_dir, 'ros2_ly_ws_sentary/src/detector/config/auto_aim_config.yaml')
 ```
 
 **問題：** 使用絕對路徑，依賴 `$HOME` 環境變數
@@ -146,7 +146,7 @@ config_file = os.path.join(home_dir, 'ros2_ly_ws/src/detector/config/auto_aim_co
 
 ### 編譯檢查：
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 colcon build --packages-select auto_aim_common gimbal_driver detector predictor tracker_solver buff_hitter outpost_hitter
 source install/setup.bash
 ```
@@ -179,13 +179,13 @@ ros2 launch detector buff.launch.py        # 能量機關
 
 1. **修改配置**
 ```bash
-nano ~/ros2_ly_ws/src/detector/config/auto_aim_config.yaml
+nano ~/ros2_ly_ws_sentary/src/detector/config/auto_aim_config.yaml
 # 第 45 行改為: "detector_config/use_video": false
 ```
 
 2. **重新編譯**
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 colcon build
 source install/setup.bash
 ```

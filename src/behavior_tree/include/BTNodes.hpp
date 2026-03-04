@@ -302,11 +302,41 @@ public:
         }
 
         app_->UpdatePostureCommand(has_target);
+        const auto& runtime = app_->GetPostureRuntime();
 
         const auto tick_board = app_->GetTickBlackboard();
         if (tick_board) {
             tick_board->set("PostureCommand", app_->GetPostureCommand());
             tick_board->set("PostureState", app_->GetPostureState());
+            tick_board->set("PostureCurrent", static_cast<std::uint8_t>(runtime.Current));
+            tick_board->set("PostureDesired", static_cast<std::uint8_t>(runtime.Desired));
+            tick_board->set("PosturePending", static_cast<std::uint8_t>(runtime.Pending));
+            tick_board->set("PostureHasPending", runtime.HasPending);
+            tick_board->set("PostureFeedbackStale", runtime.FeedbackStale);
+            tick_board->set("PostureAccumAttackSec", runtime.AccumSec[1]);
+            tick_board->set("PostureAccumDefenseSec", runtime.AccumSec[2]);
+            tick_board->set("PostureAccumMoveSec", runtime.AccumSec[3]);
+            tick_board->set("PostureDegradedAttack", runtime.Degraded[1]);
+            tick_board->set("PostureDegradedDefense", runtime.Degraded[2]);
+            tick_board->set("PostureDegradedMove", runtime.Degraded[3]);
+            tick_board->set("PostureHasRecentTarget", app_->HasRecentTarget());
+            tick_board->set("PostureUnderFireRecent", app_->IsUnderFireRecent());
+        }
+
+        if (global_board) {
+            global_board->set("PostureCurrent", static_cast<std::uint8_t>(runtime.Current));
+            global_board->set("PostureDesired", static_cast<std::uint8_t>(runtime.Desired));
+            global_board->set("PosturePending", static_cast<std::uint8_t>(runtime.Pending));
+            global_board->set("PostureHasPending", runtime.HasPending);
+            global_board->set("PostureFeedbackStale", runtime.FeedbackStale);
+            global_board->set("PostureAccumAttackSec", runtime.AccumSec[1]);
+            global_board->set("PostureAccumDefenseSec", runtime.AccumSec[2]);
+            global_board->set("PostureAccumMoveSec", runtime.AccumSec[3]);
+            global_board->set("PostureDegradedAttack", runtime.Degraded[1]);
+            global_board->set("PostureDegradedDefense", runtime.Degraded[2]);
+            global_board->set("PostureDegradedMove", runtime.Degraded[3]);
+            global_board->set("PostureHasRecentTarget", app_->HasRecentTarget());
+            global_board->set("PostureUnderFireRecent", app_->IsUnderFireRecent());
         }
         return BT::NodeStatus::SUCCESS;
     }

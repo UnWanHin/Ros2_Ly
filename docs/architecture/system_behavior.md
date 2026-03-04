@@ -12,7 +12,7 @@
 
 ### 模式 1: 測試模式（test_mode.enable: true）
 
-**配置**: [`src/detector/config/auto_aim_config.yaml:110`](src/detector/config/auto_aim_config.yaml:110)
+**配置**: [`src/detector/config/auto_aim_config.yaml:110`](../../src/detector/config/auto_aim_config.yaml:110)
 ```yaml
 test_mode:
   enable: true  # 啟用測試模式
@@ -42,7 +42,7 @@ ros2 launch detector auto_aim.launch.py
 
 ### 模式 2: 正常模式（test_mode.enable: false）
 
-**配置**: [`src/detector/config/auto_aim_config.yaml:110`](src/detector/config/auto_aim_config.yaml:110)
+**配置**: [`src/detector/config/auto_aim_config.yaml:110`](../../src/detector/config/auto_aim_config.yaml:110)
 ```yaml
 test_mode:
   enable: false  # 關閉測試模式
@@ -82,7 +82,7 @@ ros2 launch behavior_tree behavior_tree.launch.py
 **啟動的節點**:
 - behavior_tree
 
-**behavior_tree 的作用** ([`src/behavior_tree/src/SubscribeMessage.cpp:166-174`](src/behavior_tree/src/SubscribeMessage.cpp:166)):
+**behavior_tree 的作用** ([`src/behavior_tree/src/SubscribeMessage.cpp:166-174`](../../src/behavior_tree/src/SubscribeMessage.cpp:166)):
 
 ```cpp
 // 訂閱 predictor 的目標
@@ -94,7 +94,7 @@ GenSub<ly_predictor_target>([](Application& app, auto msg) {
 });
 ```
 
-**behavior_tree 發布控制指令** ([`src/behavior_tree/src/PublishMessage.cpp:52-66`](src/behavior_tree/src/PublishMessage.cpp:52)):
+**behavior_tree 發布控制指令** ([`src/behavior_tree/src/PublishMessage.cpp:52-66`](../../src/behavior_tree/src/PublishMessage.cpp:52)):
 
 ```cpp
 void Application::PubGimbalControlData() {
@@ -159,9 +159,9 @@ gimbal_driver (發送下位機)
 ### 問題：缺少 behavior_tree
 
 你創建的三個 launch 檔案：
-- [`auto_aim.launch.py`](src/detector/launch/auto_aim.launch.py)
-- [`outpost.launch.py`](src/detector/launch/outpost.launch.py)
-- [`buff.launch.py`](src/detector/launch/buff.launch.py)
+- [`auto_aim.launch.py`](../../src/detector/launch/auto_aim.launch.py)
+- [`outpost.launch.py`](../../src/detector/launch/outpost.launch.py)
+- [`buff.launch.py`](../../src/detector/launch/buff.launch.py)
 
 **都沒有啟動 behavior_tree！**
 
@@ -271,7 +271,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     home_dir = os.environ['HOME']
-    config_file = os.path.join(home_dir, 'ros2_ly_ws/src/detector/config/auto_aim_config.yaml')
+    config_file = os.path.join(home_dir, 'ros2_ly_ws_sentary/src/detector/config/auto_aim_config.yaml')
     
     return LaunchDescription([
         Node(package='gimbal_driver', executable='gimbal_driver_node', 

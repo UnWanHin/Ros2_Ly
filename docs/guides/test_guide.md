@@ -16,7 +16,7 @@ sudo chmod 666 /dev/ttyACM0  # 根據實際設備調整
 
 ### 2. 編譯工作空間
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 colcon build
 source install/setup.bash
 ```

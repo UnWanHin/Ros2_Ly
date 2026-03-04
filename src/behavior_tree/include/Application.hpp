@@ -15,6 +15,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
+#include <string>
 
 #include "Utils/Logger.hpp"
 
@@ -122,6 +123,12 @@ private:
     GimbalControlData gimbalControlData{}; /// 发送给云台的角度控制数据，火控数据等
     std::uint8_t postureCommand{0}; // 姿态控制指令: 0=不下发, 1=进攻, 2=防御, 3=移动
     std::atomic<bool> isFindTargetAtomic{false}; // 在回调函数中，每接收一次消息就会被置为true，然后在发送完控制数据之后置为false
+    std::chrono::steady_clock::time_point lastTargetSeenTime{}; // 最近一次收到目标回调
+    std::chrono::steady_clock::time_point lastDamageTime{};     // 最近一次检测到掉血
+    bool postureHealthInitialized_{false};
+    std::uint16_t postureLastHealth_{0};
+    SentryPosture postureLastDesired_{SentryPosture::Unknown};
+    std::string postureLastReason_{"init"};
 
     std::uint8_t naviCommandGoal{0}; // 导航目标
     Area::Point<std::uint16_t> naviGoalPosition{}; // 导航定位目标
@@ -258,6 +265,8 @@ public:
     void CheckDebug();
     void UpdatePostureCommand(bool has_target);
     SentryPosture SelectDesiredPosture(bool has_target) const;
+    bool HasRecentTarget() const;
+    bool IsUnderFireRecent() const;
 
     // 行为树初始化
     bool LoadBehaviorTree() noexcept;

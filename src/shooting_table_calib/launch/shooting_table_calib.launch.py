@@ -32,14 +32,6 @@ def generate_launch_description():
             parameters=[
                 config_file,
                 {
-                    # 相機參數 (保留原始接口)
-                    'camera_sn': 'KE0200060396',
-                    'camera_param.ExposureTime': 4000.0,
-                    'camera_param.Gain': 12.0,
-                    'camera_param.RedBalanceRatio': 1.2266,
-                    'camera_param.GreenBalanceRatio': 1.0,
-                    'camera_param.BlueBalanceRatio': 1.3711,
-                    
                     # detector 配置路徑 (保留原始接口)
                     'detector_config.classifier_path': os.path.join(detector_share, 'Extras', 'classifier.xml'),
                     'detector_config.detector_path': os.path.join(detector_share, 'Extras', 'armor_detector_model.xml'),

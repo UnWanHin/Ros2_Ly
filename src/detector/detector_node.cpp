@@ -9,6 +9,9 @@
 #include <chrono>
 #include <iostream> 
 #include <filesystem>
+#include <initializer_list>
+#include <memory>
+#include <vector>
 
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/msg/image.hpp>
@@ -57,7 +60,7 @@ bool save_video = false;
 bool use_video = false;
 bool use_ros_bag = false;
 std::string video_path;
-std::string camera_sn = "KE0200060396";
+std::string camera_sn;
 
 /// 宏常量与状态量
 std::atomic_bool myTeamRed{false};
@@ -73,7 +76,7 @@ ArmorFilter filter{};
 ArmorRefinder finder{};
 CarFinder carFinder{};
 CameraIntrinsicsParameterPack cameraIntrinsics{};
-PoseSolver solver{cameraIntrinsics};
+std::unique_ptr<PoseSolver> poseSolver{};
 Camera Cam;
 
 using AngleType = float;
@@ -126,33 +129,85 @@ std::atomic<AngleType> gimbal_angles_pitch;
 std::atomic<ArmorType> atomic_target{};
 PNPAimResult aim_result{};
 
-// =========================================================
-// 【核心修復】 恢復斜線 "/" 以匹配你的 YAML 格式
-// =========================================================
+template<typename T>
+bool TryReadParam(const std::initializer_list<const char*>& keys, T& value) {
+    for (const auto* key : keys) {
+        if (global_node->has_parameter(key) && global_node->get_parameter(key, value)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template<typename T>
+void LoadParamCompat(const std::initializer_list<const char*>& keys, T& value, const T& default_value) {
+    if (TryReadParam(keys, value)) {
+        return;
+    }
+    const auto* primary = *keys.begin();
+    if (!global_node->has_parameter(primary)) {
+        global_node->declare_parameter<T>(primary, default_value);
+    }
+    global_node->get_parameter(primary, value);
+    roslog::warn("Parameter '{}' missing, fallback default applied.", primary);
+}
+
+void LoadSolverIntrinsicsParam() {
+    std::vector<double> intrinsic_flat;
+    LoadParamCompat<std::vector<double>>(
+        {"solver_config.camera_intrinsic_matrix", "solver_config/camera_intrinsic_matrix"},
+        intrinsic_flat,
+        {}
+    );
+    if (intrinsic_flat.size() == 9) {
+        cameraIntrinsics.FocalLength[0] = static_cast<float>(intrinsic_flat[0]);
+        cameraIntrinsics.FocalLength[1] = static_cast<float>(intrinsic_flat[4]);
+        cameraIntrinsics.PrincipalPoint[0] = static_cast<float>(intrinsic_flat[2]);
+        cameraIntrinsics.PrincipalPoint[1] = static_cast<float>(intrinsic_flat[5]);
+    } else {
+        roslog::warn("solver_config camera_intrinsic_matrix size invalid (need 9, got {}). Use builtin defaults.", intrinsic_flat.size());
+    }
+
+    std::vector<double> distortion_vec;
+    LoadParamCompat<std::vector<double>>(
+        {"solver_config.camera_distortion_coefficients", "solver_config/camera_distortion_coefficients"},
+        distortion_vec,
+        {}
+    );
+    if (distortion_vec.size() == 5) {
+        cameraIntrinsics.RadialDistortion[0] = static_cast<float>(distortion_vec[0]);
+        cameraIntrinsics.RadialDistortion[1] = static_cast<float>(distortion_vec[1]);
+        cameraIntrinsics.TangentialDistortion[0] = static_cast<float>(distortion_vec[2]);
+        cameraIntrinsics.TangentialDistortion[1] = static_cast<float>(distortion_vec[3]);
+        cameraIntrinsics.RadialDistortion[2] = static_cast<float>(distortion_vec[4]);
+    } else {
+        roslog::warn("solver_config camera_distortion_coefficients size invalid (need 5, got {}). Use builtin defaults.", distortion_vec.size());
+    }
+}
+
 void InitialParam(){
-    // YAML 裡寫的是 "detector_config/show"，所以這裡必須用 "/"
-    global_node->GetParam<bool>("detector_config/show", pub_image, true);
-    global_node->GetParam<bool>("detector_config/draw", draw_image, true);
-    global_node->GetParam<bool>("detector_config/debug_mode", debug_mode, false);
-    global_node->GetParam<bool>("detector_config/debug_team_blue", debug_team_blue, false);
-    global_node->GetParam<bool>("detector_config/save_video", save_video, false);
-    global_node->GetParam<bool>("detector_config/web_show", web_show, true);
-    global_node->GetParam<bool>("detector_config/use_video", use_video, false);
-    global_node->GetParam<bool>("detector_config/use_ros_bag", use_ros_bag, false);
-    global_node->GetParam<std::string>("detector_config/video_path", video_path, "");
-    global_node->GetParam<std::string>("camera_param/camera_sn", camera_sn, "KE0200060396");
+    // 兼容点号/斜杠两种参数命名，保证一份 YAML 覆盖全链路。
+    LoadParamCompat<bool>({"detector_config.show", "detector_config/show"}, pub_image, true);
+    LoadParamCompat<bool>({"detector_config.draw", "detector_config/draw"}, draw_image, true);
+    LoadParamCompat<bool>({"detector_config.debug_mode", "detector_config/debug_mode"}, debug_mode, false);
+    LoadParamCompat<bool>({"detector_config.debug_team_blue", "detector_config/debug_team_blue"}, debug_team_blue, false);
+    LoadParamCompat<bool>({"detector_config.save_video", "detector_config/save_video"}, save_video, false);
+    LoadParamCompat<bool>({"detector_config.web_show", "detector_config/web_show"}, web_show, true);
+    LoadParamCompat<bool>({"detector_config.use_video", "detector_config/use_video"}, use_video, false);
+    LoadParamCompat<bool>({"detector_config.use_ros_bag", "detector_config/use_ros_bag"}, use_ros_bag, false);
+    LoadParamCompat<std::string>({"detector_config.video_path", "detector_config/video_path"}, video_path, "");
+    LoadParamCompat<std::string>({"camera_param.camera_sn", "camera_param/camera_sn"}, camera_sn, std::string(""));
 }
 
 void ConfigureCamera() {
     auto &config = Cam.Configure();
     config.AutoExposure.Value = GX_EXPOSURE_AUTO_OFF;
-    // YAML 裡寫的是 "camera_param/ExposureTime"，所以用 "/"
-    global_node->GetParam<double>("camera_param/ExposureTime", config.ExposureTime.Value, 4000);
+    LoadParamCompat<double>({"camera_param.ExposureTime", "camera_param/ExposureTime"}, config.ExposureTime.Value, 4000.0);
     config.AutoGain.Value = GX_GAIN_AUTO_OFF;
-    global_node->GetParam<double>("camera_param/Gain", config.Gain.Value, 12);
-    global_node->GetParam<double>("camera_param/RedBalanceRatio", config.RedBalanceRatio.Value, 1.2266f);
-    global_node->GetParam<double>("camera_param/GreenBalanceRatio", config.GreenBalanceRatio.Value, 1.0f);
-    global_node->GetParam<double>("camera_param/BlueBalanceRatio", config.BlueBalanceRatio.Value, 1.3711f);
+    LoadParamCompat<double>({"camera_param.Gain", "camera_param/Gain"}, config.Gain.Value, 12.0);
+    LoadParamCompat<double>({"camera_param.RedBalanceRatio", "camera_param/RedBalanceRatio"}, config.RedBalanceRatio.Value, 1.2266);
+    LoadParamCompat<double>({"camera_param.GreenBalanceRatio", "camera_param/GreenBalanceRatio"}, config.GreenBalanceRatio.Value, 1.0);
+    LoadParamCompat<double>({"camera_param.BlueBalanceRatio", "camera_param/BlueBalanceRatio"}, config.BlueBalanceRatio.Value, 1.3711);
 }
 
 std::string ResolvePathFromDetectorShare(const std::string& configured_path,
@@ -364,7 +419,11 @@ void ImageLoop() {
                 ArmorType target = atomic_target;
                 if (!filter.Filter(detected_armors, target, filtered_armors)) { continue; }
 
-                if (!finder.ReFindAndSolveAll(solver, filtered_armors, target, target_armor, armor_list_msg)) {
+                if (!poseSolver) {
+                    roslog::warn("PoseSolver not initialized, skip this frame.");
+                    continue;
+                }
+                if (!finder.ReFindAndSolveAll(*poseSolver, filtered_armors, target, target_armor, armor_list_msg)) {
                 }
                 if(!carFinder.FindCar(cars, armor_list_msg.cars)){
                 }
@@ -429,6 +488,8 @@ int main(int argc, char **argv) try {
     std::string car_model_path;
 
     InitialParam();
+    LoadSolverIntrinsicsParam();
+    poseSolver = std::make_unique<PoseSolver>(cameraIntrinsics);
 
     /// 初始化节点和模块
 
@@ -445,6 +506,10 @@ int main(int argc, char **argv) try {
             }
         } else {
             ConfigureCamera();
+            if (camera_sn.empty()) {
+                std::cerr << "[ERROR] camera_param.camera_sn (or camera_param/camera_sn) is empty." << std::endl;
+                return -1;
+            }
             if (!Cam.Initialize("", camera_sn)) {
                 std::cerr << "[ERROR] Failed to initialize camera with SN: " << camera_sn << std::endl;
                 return -1;
@@ -460,10 +525,9 @@ int main(int argc, char **argv) try {
         VideoStreamer::init();
     }
     
-    // 【核心修復】 恢復斜線 "/" 以匹配你的 YAML 格式
-    global_node->GetParam<std::string>("detector_config/classifier_path", classifier_path, "");
-    global_node->GetParam<std::string>("detector_config/detector_path", detector_path, "");    
-    global_node->GetParam<std::string>("detector_config/car_model_path", car_model_path, "");
+    LoadParamCompat<std::string>({"detector_config.classifier_path", "detector_config/classifier_path"}, classifier_path, "");
+    LoadParamCompat<std::string>({"detector_config.detector_path", "detector_config/detector_path"}, detector_path, "");
+    LoadParamCompat<std::string>({"detector_config.car_model_path", "detector_config/car_model_path"}, car_model_path, "");
 
     classifier_path = ResolvePathFromDetectorShare(classifier_path, detector_share_dir);
     detector_path = ResolvePathFromDetectorShare(detector_path, detector_share_dir);

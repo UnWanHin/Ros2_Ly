@@ -187,6 +187,7 @@ namespace BehaviorTree{
             obj.autoAimData.BuffFollow = false;
             obj.autoAimData.FireStatus = true;
             obj.isFindTargetAtomic = true;
+            obj.lastTargetSeenTime = std::chrono::steady_clock::now();
             obj.LoggerPtr->Info("进入回调，更新角度");
         });
 
@@ -201,6 +202,7 @@ namespace BehaviorTree{
             //     obj.isFindTargetAtomic = true;
             // }
             obj.isFindTargetAtomic = true;
+            obj.lastTargetSeenTime = std::chrono::steady_clock::now();
         });
 
         // ly_outpost_target
@@ -211,6 +213,7 @@ namespace BehaviorTree{
             obj.outpostAimData.FireStatus = true;
             obj.outpostAimData.BuffFollow = false;
             obj.isFindTargetAtomic = true;
+            obj.lastTargetSeenTime = std::chrono::steady_clock::now();
         });
 
         // ly_enemy_hp

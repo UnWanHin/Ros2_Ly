@@ -14,7 +14,7 @@
 
 **適用場景**: 快速功能測試，無需決策模塊
 
-**配置**: [`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml:109)
+**配置**: [`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml:109)
 ```yaml
 test_mode:
   enable: true  # 設為 true 啟用測試模式
@@ -22,7 +22,7 @@ test_mode:
 
 **啟動方式**:
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 source install/setup.bash
 
 # 選擇一種模式啟動
@@ -50,7 +50,7 @@ ros2 launch detector buff.launch.py        # 能量機關模式
 
 **適用場景**: 正式比賽，需要完整決策邏輯
 
-**配置**: [`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml:109)
+**配置**: [`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml:109)
 ```yaml
 test_mode:
   enable: false  # 設為 false 等待 behavior_tree
@@ -58,7 +58,7 @@ test_mode:
 
 **啟動方式**:
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 source install/setup.bash
 
 # 終端 1: 啟動感知模塊
@@ -87,7 +87,7 @@ ros2 launch behavior_tree behavior_tree.launch.py
 
 ### 必須修改的參數
 
-**文件**: [`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml)
+**文件**: [`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml)
 
 #### 1. 圖像源（第 45 行）
 ```yaml
@@ -126,7 +126,7 @@ io_config:
 
 ### 開火指令流程
 
-**simple_bridge_node** ([`src/detector/simple_bridge_node.cpp:43`](src/detector/simple_bridge_node.cpp:43)):
+**simple_bridge_node** ([`src/detector/simple_bridge_node.cpp:43`](../../src/detector/simple_bridge_node.cpp:43)):
 ```cpp
 // 發射指令
 std_msgs::msg::UInt8 fire;
@@ -134,7 +134,7 @@ fire.data = 1;  // 1 = 開火
 fire_pub_->publish(fire);  // 發布到 /ly/control/firecode
 ```
 
-**gimbal_driver** ([`src/gimbal_driver/main.cpp:90`](src/gimbal_driver/main.cpp:90)):
+**gimbal_driver** ([`src/gimbal_driver/main.cpp:90`](../../src/gimbal_driver/main.cpp:90)):
 ```cpp
 // 訂閱開火指令
 GenSub<ly_control_firecode>([](GimbalControlData& g, const std_msgs::msg::UInt8& m) {
@@ -147,7 +147,7 @@ Device.Write(data);  // 通過串口發送
 
 ### 角度控制流程
 
-**simple_bridge_node** ([`src/detector/simple_bridge_node.cpp:36`](src/detector/simple_bridge_node.cpp:36)):
+**simple_bridge_node** ([`src/detector/simple_bridge_node.cpp:36`](../../src/detector/simple_bridge_node.cpp:36)):
 ```cpp
 // 角度指令
 gimbal_driver::msg::GimbalAngles angles;
@@ -156,7 +156,7 @@ angles.pitch = msg->pitch;
 angles_pub_->publish(angles);  // 發布到 /ly/control/angles
 ```
 
-**gimbal_driver** ([`src/gimbal_driver/main.cpp:84`](src/gimbal_driver/main.cpp:84)):
+**gimbal_driver** ([`src/gimbal_driver/main.cpp:84`](../../src/gimbal_driver/main.cpp:84)):
 ```cpp
 // 訂閱角度指令
 GenSub<ly_control_angles>([](GimbalControlData& g, const gimbal_driver::msg::GimbalAngles& m) {
@@ -243,7 +243,7 @@ gimbal_driver
 
 1. **修改配置文件**:
 ```bash
-vim ~/ros2_ly_ws/src/detector/config/auto_aim_config.yaml
+vim ~/ros2_ly_ws_sentary/src/detector/config/auto_aim_config.yaml
 ```
 
 2. **修改參數**:
@@ -289,7 +289,7 @@ ros2 launch detector auto_aim.launch.py
 ### 首次編譯
 
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 
 # 編譯所有包
 colcon build
@@ -304,7 +304,7 @@ source install/setup.bash
 ### 修改代碼後重新編譯
 
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 
 # 只編譯修改的包（例如 detector）
 colcon build --packages-select detector

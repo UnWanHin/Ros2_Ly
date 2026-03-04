@@ -1,7 +1,7 @@
 # 實測配置修改指南
 
 ## 📝 配置檔案位置
-[`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml:1)
+[`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml:1)
 
 ---
 
@@ -84,7 +84,7 @@ v4l2-ctl --list-devices
 
 ### 方法 1: 直接編輯（推薦）
 ```bash
-nano ~/ros2_ly_ws/src/detector/config/auto_aim_config.yaml
+nano ~/ros2_ly_ws_sentary/src/detector/config/auto_aim_config.yaml
 ```
 
 修改以下行：
@@ -96,7 +96,7 @@ nano ~/ros2_ly_ws/src/detector/config/auto_aim_config.yaml
 
 ### 方法 2: 使用 sed 批量修改
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 
 # 關閉視頻模式
 sed -i 's/"detector_config\/use_video": true/"detector_config\/use_video": false/' \
@@ -219,7 +219,7 @@ ros2 param set /detector camera_param.Gain 18.0
 
 ### 創建配置備份
 ```bash
-cd ~/ros2_ly_ws/src/detector/config
+cd ~/ros2_ly_ws_sentary/src/detector/config
 
 # 備份測試配置
 cp auto_aim_config.yaml auto_aim_config_test.yaml
@@ -288,7 +288,7 @@ cp auto_aim_config_test.yaml auto_aim_config.yaml
 
 ```bash
 # 1. 重新編譯（如果改了 launch）
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 colcon build --packages-select detector
 
 # 2. 重新 source

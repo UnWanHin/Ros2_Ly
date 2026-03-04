@@ -101,18 +101,30 @@
 
 ---
 
-## 5. 决策映射（当前默认）
+## 5. 决策逻辑（强化版）
 
-由 `Application::SelectDesiredPosture()` 生成期望姿态：
+当前不再是单纯 if-else，而是“**评分式决策 + 迟滞 + 时间窗**”：
 
-- `Protected` 或低能量：`Defense`
-- `NaviTest`：`Move`
-- `RotateScan`：`Move`
-- 有目标：`Attack`
-- `Buff/Outpost` 且无目标：`Attack`
-- 其他：`Move`
+1. 先按策略模式给基础分：
+   - `Protected` 偏 `Defense`
+   - `NaviTest` 偏 `Move`
+   - `HitSentry/HitHero` 偏 `Attack`
+2. 再叠加瞄准模式分：
+   - `RotateScan` 偏 `Move`
+   - `Buff/Outpost` 偏 `Attack`
+3. 使用目标时间窗（`TargetKeepMs`）：
+   - 最近目标可见则加大 `Attack` 权重
+   - 避免目标瞬时丢失导致姿态抖动
+4. 叠加风险分：
+   - 低能量、低血、低弹、最近受击（`DamageKeepSec`）会提升 `Defense`/`Move`
+5. 回读过期保护：
+   - `feedback_stale` 时降低激进权重，偏保守姿态
+6. 叠加 3 分钟规则惩罚：
+   - 当前姿态累计接近或超过阈值时，惩罚该姿态得分
+7. 加入切换迟滞（`ScoreHysteresis`）：
+   - 如果新姿态分数领先不够大，则保持当前姿态，减少来回切换
 
-说明：这是默认映射，后续可按实机效果调整权重。
+这套逻辑在实战里比硬条件切换更稳定，尤其是目标抖动和链路抖动场景。
 
 ---
 
@@ -130,7 +142,13 @@
   "PendingAckTimeoutMs": 600,
   "RetryIntervalMs": 300,
   "MaxRetryCount": 3,
-  "OptimisticAck": true
+  "OptimisticAck": true,
+  "TargetKeepMs": 800,
+  "DamageKeepSec": 4,
+  "LowHealthThreshold": 120,
+  "VeryLowHealthThreshold": 80,
+  "LowAmmoThreshold": 30,
+  "ScoreHysteresis": 2
 }
 ```
 
@@ -143,6 +161,12 @@
 - `RetryIntervalMs`: 重试间隔。
 - `MaxRetryCount`: 最大重试次数。
 - `OptimisticAck`: 缺失回读时是否乐观确认（便于上位机单独联调）。
+- `TargetKeepMs`: 目标短时丢失容忍窗口，控制攻击姿态稳定性。
+- `DamageKeepSec`: 最近受击窗口，窗口内偏防御/机动。
+- `LowHealthThreshold`: 低血阈值。
+- `VeryLowHealthThreshold`: 极低血阈值（高优先级防守）。
+- `LowAmmoThreshold`: 低弹阈值。
+- `ScoreHysteresis`: 姿态切换分差迟滞，越大越稳但响应更慢。
 
 ---
 
@@ -153,11 +177,17 @@
 2. 观察姿态回读：
    - `ros2 topic echo /ly/gimbal/posture`
 3. 对照行为树日志：
-   - 关注 `[Posture] command=... reason=...` 日志，确认是否被 cooldown/pending 挡住。
+   - 关注 `[Posture] cmd=... desired=... current=... pending=... reason=...`，确认是否被 cooldown/pending/hysteresis 挡住。
 4. 重点测试场景：
    - 高频目标进出（防抖）
    - 回读缺失（死锁恢复）
    - 长时间单姿态（3 分钟提前轮换）
+5. 观察黑板可视化字段（已写入 Tick/Global Blackboard）：
+   - `PostureCurrent / PostureDesired / PosturePending`
+   - `PostureHasPending / PostureFeedbackStale`
+   - `PostureAccumAttackSec / PostureAccumDefenseSec / PostureAccumMoveSec`
+   - `PostureDegradedAttack / PostureDegradedDefense / PostureDegradedMove`
+   - `PostureHasRecentTarget / PostureUnderFireRecent`
 
 ---
 
@@ -167,3 +197,11 @@
 2. 把姿态运行态（累计时间、degraded 标志）做可视化输出，便于场上调参。
 3. 若后续引入完整热量/底盘功率反馈，可把这些信号纳入 `SelectDesiredPosture` 的权重模型。
 
+---
+
+## 9. 变更记录
+
+- 2026-03-04
+  - 姿态决策升级为评分式模型（策略/瞄准/目标/资源/受击/回读综合评估）
+  - 新增目标时间窗、受击时间窗、低血低弹阈值、分差迟滞参数
+  - `SelectPosture` 增加姿态运行态写黑板，便于联调可观测

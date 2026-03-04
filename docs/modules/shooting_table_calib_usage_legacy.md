@@ -1,5 +1,7 @@
 # 射表标定系统使用说明
 
+> Legacy：此文档来自旧版说明，当前实现请优先参考 `docs/modules/shooting_table_calib.md`。
+
 ## 概述
 射表标定系统（ShootingTableCalibration）是基于AutoAim系统开发的射击精度标定工具，用于收集不同距离和高度下的射击补偿数据。
 

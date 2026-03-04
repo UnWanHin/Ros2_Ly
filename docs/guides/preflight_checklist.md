@@ -10,34 +10,34 @@
 ### 2. Launch 檔案
 已創建 3 個測試 launch 檔案：
 
-#### [`src/detector/launch/auto_aim.launch.py`](src/detector/launch/auto_aim.launch.py)
+#### [`src/detector/launch/auto_aim.launch.py`](../../src/detector/launch/auto_aim.launch.py)
 - **用途**: 裝甲板自瞄測試
 - **啟動節點**: gimbal_driver + detector + tracker_solver + predictor + simple_bridge_node
 - **啟動命令**: `ros2 launch detector auto_aim.launch.py`
 
-#### [`src/detector/launch/outpost.launch.py`](src/detector/launch/outpost.launch.py)
+#### [`src/detector/launch/outpost.launch.py`](../../src/detector/launch/outpost.launch.py)
 - **用途**: 前哨站打擊測試
 - **啟動節點**: gimbal_driver + outpost_hitter + simple_bridge_node
 - **啟動命令**: `ros2 launch detector outpost.launch.py`
 
-#### [`src/detector/launch/buff.launch.py`](src/detector/launch/buff.launch.py)
+#### [`src/detector/launch/buff.launch.py`](../../src/detector/launch/buff.launch.py)
 - **用途**: 能量機關打擊測試
 - **啟動節點**: gimbal_driver + buff_hitter + simple_bridge_node
 - **啟動命令**: `ros2 launch detector buff.launch.py`
 
 ### 3. 測試模式橋接節點
-- ✅ [`simple_bridge_node.cpp`](src/detector/simple_bridge_node.cpp) - 測試用橋接節點
+- ✅ [`simple_bridge_node.cpp`](../../src/detector/simple_bridge_node.cpp) - 測試用橋接節點
 - ✅ 讀取 `test_mode.enable` 參數控制是否轉發
 - ✅ `test_mode: true` 時自動轉發開火指令（看到就打）
 - ✅ `test_mode: false` 時等待 behavior_tree 決策
 
 ### 4. 配置文件統一
-- ✅ 所有 launch 檔案都使用統一配置：[`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml)
+- ✅ 所有 launch 檔案都使用統一配置：[`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml)
 - ✅ 路徑使用 `$HOME` 環境變量，避免硬編碼
 
 ### 5. 路徑修復
-- ✅ [`shooting_table_node.cpp:433`](src/shooting_table_calib/shooting_table_node.cpp:433) - 使用 `$HOME/workspace/record`
-- ✅ [`buff_hitter/config/config.json:15`](src/buff_hitter/config/config.json:15) - 使用相對路徑 `src/buff_hitter/utils/buff_models/red_best.xml`
+- ✅ [`shooting_table_node.cpp:433`](../../src/shooting_table_calib/shooting_table_node.cpp:433) - 使用 `$HOME/workspace/record`
+- ✅ [`buff_hitter/config/config.json:15`](../../src/buff_hitter/config/config.json:15) - 使用相對路徑 `src/buff_hitter/utils/buff_models/red_best.xml`
 
 ---
 
@@ -45,7 +45,7 @@
 
 ### 🔴 關鍵配置修改
 
-**文件**: [`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml)
+**文件**: [`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml)
 
 #### 1. 圖像源（第 45 行）
 ```yaml
@@ -126,10 +126,10 @@ io_config:
 ```
 
 ### 消息類型
-- `/ly/detector/armors` - [`auto_aim_common::msg::Armors`](src/auto_aim_common/msg/Armors.msg)
-- `/ly/tracker/results` - [`auto_aim_common::msg::Trackers`](src/auto_aim_common/msg/Trackers.msg)
-- `/ly/predictor/target` - [`auto_aim_common::msg::Target`](src/auto_aim_common/msg/Target.msg)
-- `/ly/gimbal/angles` - [`gimbal_driver::msg::GimbalAngles`](src/gimbal_driver/msg/GimbalAngles.msg)
+- `/ly/detector/armors` - [`auto_aim_common::msg::Armors`](../../src/auto_aim_common/msg/Armors.msg)
+- `/ly/tracker/results` - [`auto_aim_common::msg::Trackers`](../../src/auto_aim_common/msg/Trackers.msg)
+- `/ly/predictor/target` - [`auto_aim_common::msg::Target`](../../src/auto_aim_common/msg/Target.msg)
+- `/ly/gimbal/angles` - [`gimbal_driver::msg::GimbalAngles`](../../src/gimbal_driver/msg/GimbalAngles.msg)
 
 ---
 
@@ -138,10 +138,10 @@ io_config:
 ### ROS2 時間戳使用
 所有節點都使用 `rclcpp::Time` 和 `builtin_interfaces::msg::Time`：
 
-- ✅ [`detector_node.cpp`](src/detector/detector_node.cpp) - 使用 `this->now()`
-- ✅ [`tracker_solver`](src/tracker_solver/car_tracker_solver_node.cpp) - 使用 `msg->header.stamp`
-- ✅ [`predictor`](src/predictor/predictor_node.cpp) - 使用 `msg->header.stamp`
-- ✅ [`gimbal_driver`](src/gimbal_driver/main.cpp) - 使用 `rclcpp::Time`
+- ✅ [`detector_node.cpp`](../../src/detector/detector_node.cpp) - 使用 `this->now()`
+- ✅ [`tracker_solver`](../../src/tracker_solver/car_tracker_solver_node.cpp) - 使用 `msg->header.stamp`
+- ✅ [`predictor`](../../src/predictor/predictor_node.cpp) - 使用 `msg->header.stamp`
+- ✅ [`gimbal_driver`](../../src/gimbal_driver/main.cpp) - 使用 `rclcpp::Time`
 
 **注意**: ROS2 默認使用系統時間，確保車載電腦時間已同步（NTP 或手動設置）。
 
@@ -151,7 +151,7 @@ io_config:
 
 ### 1. 編譯確認
 ```bash
-cd ~/ros2_ly_ws
+cd ~/ros2_ly_ws_sentary
 colcon build
 source install/setup.bash
 ```
@@ -231,15 +231,15 @@ ros2 topic echo /ly/detector/armors --field header.stamp
 ## 📝 配置文件位置總結
 
 ### 主配置
-- [`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml) - **統一配置文件**
+- [`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml) - **統一配置文件**
 
 ### Launch 檔案
-- [`src/detector/launch/auto_aim.launch.py`](src/detector/launch/auto_aim.launch.py)
-- [`src/detector/launch/outpost.launch.py`](src/detector/launch/outpost.launch.py)
-- [`src/detector/launch/buff.launch.py`](src/detector/launch/buff.launch.py)
+- [`src/detector/launch/auto_aim.launch.py`](../../src/detector/launch/auto_aim.launch.py)
+- [`src/detector/launch/outpost.launch.py`](../../src/detector/launch/outpost.launch.py)
+- [`src/detector/launch/buff.launch.py`](../../src/detector/launch/buff.launch.py)
 
 ### 其他配置
-- [`src/buff_hitter/config/config.json`](src/buff_hitter/config/config.json) - buff 專用配置
+- [`src/buff_hitter/config/config.json`](../../src/buff_hitter/config/config.json) - buff 專用配置
 
 ---
 

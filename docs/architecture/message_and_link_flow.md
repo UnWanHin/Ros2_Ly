@@ -49,7 +49,7 @@
 
 #### 1. 數據獲取 - gimbal_driver
 
-**文件**: [`src/gimbal_driver/main.cpp`](src/gimbal_driver/main.cpp)
+**文件**: [`src/gimbal_driver/main.cpp`](../../src/gimbal_driver/main.cpp)
 
 **數據來源**:
 - 相機硬件 (GalaxySDK) 或視頻文件
@@ -57,7 +57,7 @@
 
 **發布的 Topic**:
 - `/ly/gimbal/angles` - 雲台當前角度
-  - 類型: [`gimbal_driver::msg::GimbalAngles`](src/gimbal_driver/msg/GimbalAngles.msg)
+  - 類型: [`gimbal_driver::msg::GimbalAngles`](../../src/gimbal_driver/msg/GimbalAngles.msg)
   - 內容: `yaw`, `pitch`
   
 - `/ly/me/is_team_red` - 我方隊伍顏色
@@ -70,7 +70,7 @@
 
 **訂閱的 Topic** (用於接收控制指令):
 - `/ly/control/angles` - 控制雲台角度
-  - 類型: [`gimbal_driver::msg::GimbalAngles`](src/gimbal_driver/msg/GimbalAngles.msg)
+  - 類型: [`gimbal_driver::msg::GimbalAngles`](../../src/gimbal_driver/msg/GimbalAngles.msg)
 
 **關鍵代碼位置**:
 ```cpp
@@ -84,7 +84,7 @@ LY_DEF_ROS_TOPIC(ly_bullet_speed, "/ly/bullet/speed", std_msgs::msg::Float32);
 
 #### 2. 裝甲板檢測 - detector
 
-**文件**: [`src/detector/detector_node.cpp`](src/detector/detector_node.cpp)
+**文件**: [`src/detector/detector_node.cpp`](../../src/detector/detector_node.cpp)
 
 **訂閱的 Topic**:
 - `/ly/gimbal/angles` - 雲台角度 (用於 PnP 解算)
@@ -94,7 +94,7 @@ LY_DEF_ROS_TOPIC(ly_bullet_speed, "/ly/bullet/speed", std_msgs::msg::Float32);
 
 **發布的 Topic**:
 - `/ly/detector/armors` - 檢測到的裝甲板列表
-  - 類型: [`auto_aim_common::msg::Armors`](src/auto_aim_common/msg/Armors.msg)
+  - 類型: [`auto_aim_common::msg::Armors`](../../src/auto_aim_common/msg/Armors.msg)
   - 內容:
     - `header.stamp` - 時間戳
     - `yaw`, `pitch` - 當前雲台角度
@@ -123,14 +123,14 @@ if(aa_enable){
 
 #### 3. 追蹤與位姿解算 - tracker_solver
 
-**文件**: [`src/tracker_solver/car_tracker_solver_node.cpp`](src/tracker_solver/car_tracker_solver_node.cpp)
+**文件**: [`src/tracker_solver/car_tracker_solver_node.cpp`](../../src/tracker_solver/car_tracker_solver_node.cpp)
 
 **訂閱的 Topic**:
 - `/ly/detector/armors` - 檢測到的裝甲板
 
 **發布的 Topic**:
 - `/ly/tracker/results` - 追蹤結果
-  - 類型: [`auto_aim_common::msg::Trackers`](src/auto_aim_common/msg/Trackers.msg)
+  - 類型: [`auto_aim_common::msg::Trackers`](../../src/auto_aim_common/msg/Trackers.msg)
   - 內容:
     - `header.stamp` - 時間戳
     - `yaw`, `pitch` - 雲台角度
@@ -162,7 +162,7 @@ node.Publisher<ly_tracker_results>()->publish(trackers_msg);
 
 #### 4. 預測與彈道解算 - predictor
 
-**文件**: [`src/predictor/predictor_node.cpp`](src/predictor/predictor_node.cpp)
+**文件**: [`src/predictor/predictor_node.cpp`](../../src/predictor/predictor_node.cpp)
 
 **訂閱的 Topic**:
 - `/ly/tracker/results` - 追蹤結果
@@ -171,7 +171,7 @@ node.Publisher<ly_tracker_results>()->publish(trackers_msg);
 
 **發布的 Topic**:
 - `/ly/predictor/target` - 預測目標
-  - 類型: [`auto_aim_common::msg::Target`](src/auto_aim_common/msg/Target.msg)
+  - 類型: [`auto_aim_common::msg::Target`](../../src/auto_aim_common/msg/Target.msg)
   - 內容:
     - `header.stamp` - 時間戳
     - `status` - 是否有效目標 (bool)
@@ -179,7 +179,7 @@ node.Publisher<ly_tracker_results>()->publish(trackers_msg);
     - `pitch` - 目標 pitch 角
 
 - `/ly/predictor/debug` - 調試信息 (EKF 狀態)
-  - 類型: [`auto_aim_common::msg::DebugFilter`](src/auto_aim_common/msg/DebugFilter.msg)
+  - 類型: [`auto_aim_common::msg::DebugFilter`](../../src/auto_aim_common/msg/DebugFilter.msg)
 
 **處理流程**:
 1. 接收追蹤結果 (第 106 行)
@@ -205,7 +205,7 @@ if(control_result.valid){
 
 #### 5. 發送下位機 - gimbal_driver
 
-**文件**: [`src/gimbal_driver/main.cpp`](src/gimbal_driver/main.cpp)
+**文件**: [`src/gimbal_driver/main.cpp`](../../src/gimbal_driver/main.cpp)
 
 **訂閱的 Topic**:
 - `/ly/predictor/target` - 預測目標 (自瞄模式)
@@ -254,7 +254,7 @@ if(control_result.valid){
 
 **發布的 Topic**:
 - `/ly/outpost/armors` - 前哨站裝甲板
-  - 類型: [`auto_aim_common::msg::Armors`](src/auto_aim_common/msg/Armors.msg)
+  - 類型: [`auto_aim_common::msg::Armors`](../../src/auto_aim_common/msg/Armors.msg)
   - 內容: 與自瞄模式相同，但只包含前哨站裝甲板 (type=7)
 
 **關鍵代碼位置**:
@@ -269,14 +269,14 @@ else if(outpost_enable){
 
 #### 2. 前哨站打擊 - outpost_hitter
 
-**文件**: [`src/outpost_hitter/outpost_hitter_node.cpp`](src/outpost_hitter/outpost_hitter_node.cpp)
+**文件**: [`src/outpost_hitter/outpost_hitter_node.cpp`](../../src/outpost_hitter/outpost_hitter_node.cpp)
 
 **訂閱的 Topic**:
 - `/ly/outpost/armors` - 前哨站裝甲板檢測
 
 **發布的 Topic**:
 - `/ly/outpost/target` - 前哨站目標
-  - 類型: [`auto_aim_common::msg::Target`](src/auto_aim_common/msg/Target.msg)
+  - 類型: [`auto_aim_common::msg::Target`](../../src/auto_aim_common/msg/Target.msg)
   - 內容: `status`, `yaw`, `pitch`
 
 **處理流程**:
@@ -327,7 +327,7 @@ node.Publisher<ly_outpost_target>()->publish(target_msg);
 
 **發布的 Topic**:
 - `/ly/ra/angle_image` - 帶角度的圖像
-  - 類型: [`auto_aim_common::msg::AngleImage`](src/auto_aim_common/msg/AngleImage.msg)
+  - 類型: [`auto_aim_common::msg::AngleImage`](../../src/auto_aim_common/msg/AngleImage.msg)
   - 內容:
     - `image` - 圖像數據
     - `yaw` - 當前 yaw 角
@@ -337,7 +337,7 @@ node.Publisher<ly_outpost_target>()->publish(target_msg);
 
 #### 2. 能量機關打擊 - buff_hitter
 
-**文件**: [`src/buff_hitter/main.cpp`](src/buff_hitter/main.cpp)
+**文件**: [`src/buff_hitter/main.cpp`](../../src/buff_hitter/main.cpp)
 
 **訂閱的 Topic**:
 - `/ly/ra/angle_image` - 帶角度的圖像
@@ -346,7 +346,7 @@ node.Publisher<ly_outpost_target>()->publish(target_msg);
 
 **發布的 Topic**:
 - `/ly/buff/target` - 能量機關目標
-  - 類型: [`auto_aim_common::msg::Target`](src/auto_aim_common/msg/Target.msg)
+  - 類型: [`auto_aim_common::msg::Target`](../../src/auto_aim_common/msg/Target.msg)
   - 內容: `status`, `yaw`, `pitch`
 
 **處理流程**:
@@ -383,7 +383,7 @@ void PubData(const bool& hitBuff, const gimbal_driver::msg::GimbalAngles &angles
 ### 核心消息類型
 
 #### 1. Armors - 裝甲板檢測結果
-**文件**: [`src/auto_aim_common/msg/Armors.msg`](src/auto_aim_common/msg/Armors.msg)
+**文件**: [`src/auto_aim_common/msg/Armors.msg`](../../src/auto_aim_common/msg/Armors.msg)
 ```
 std_msgs/Header header
 float32 yaw
@@ -394,7 +394,7 @@ Car[] cars
 ```
 
 #### 2. Trackers - 追蹤結果
-**文件**: [`src/auto_aim_common/msg/Trackers.msg`](src/auto_aim_common/msg/Trackers.msg)
+**文件**: [`src/auto_aim_common/msg/Trackers.msg`](../../src/auto_aim_common/msg/Trackers.msg)
 ```
 std_msgs/Header header
 float32 yaw
@@ -404,7 +404,7 @@ CarTracker[] car_trackers
 ```
 
 #### 3. Target - 控制目標
-**文件**: [`src/auto_aim_common/msg/Target.msg`](src/auto_aim_common/msg/Target.msg)
+**文件**: [`src/auto_aim_common/msg/Target.msg`](../../src/auto_aim_common/msg/Target.msg)
 ```
 std_msgs/Header header
 bool status
@@ -413,7 +413,7 @@ float32 pitch
 ```
 
 #### 4. GimbalAngles - 雲台角度
-**文件**: [`src/gimbal_driver/msg/GimbalAngles.msg`](src/gimbal_driver/msg/GimbalAngles.msg)
+**文件**: [`src/gimbal_driver/msg/GimbalAngles.msg`](../../src/gimbal_driver/msg/GimbalAngles.msg)
 ```
 float32 yaw
 float32 pitch
@@ -424,7 +424,7 @@ float32 pitch
 ## 🔧 關鍵配置
 
 ### 統一配置文件
-**文件**: [`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml)
+**文件**: [`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml)
 
 所有節點都從這個配置文件讀取參數：
 - 相機內參
@@ -583,9 +583,9 @@ ros2 topic hz /ly/predictor/target
 
 ## 📚 相關文件
 
-- Launch 檔案: [`src/detector/launch/`](src/detector/launch/)
-- 配置檔案: [`src/detector/config/auto_aim_config.yaml`](src/detector/config/auto_aim_config.yaml)
-- 消息定義: [`src/auto_aim_common/msg/`](src/auto_aim_common/msg/)
+- Launch 檔案: [`src/detector/launch/`](../../src/detector/launch/)
+- 配置檔案: [`src/detector/config/auto_aim_config.yaml`](../../src/detector/config/auto_aim_config.yaml)
+- 消息定義: [`src/auto_aim_common/msg/`](../../src/auto_aim_common/msg/)
 - 上車檢查清單: [`上車前最終檢查清單.md`](上車前最終檢查清單.md)
 
 ---

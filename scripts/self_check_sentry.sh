@@ -192,6 +192,85 @@ check_file_exists() {
   fi
 }
 
+trim_text() {
+  local text="$1"
+  text="${text#"${text%%[![:space:]]*}"}"
+  text="${text%"${text##*[![:space:]]}"}"
+  printf "%s" "${text}"
+}
+
+extract_yaml_quoted_key_value() {
+  local yaml_file="$1"
+  local key_pattern="$2"
+  local line
+  local value
+
+  line="$(grep -E "^[[:space:]]*\"${key_pattern}\"[[:space:]]*:" "${yaml_file}" | head -n1 || true)"
+  if [[ -z "${line}" ]]; then
+    printf "%s" ""
+    return
+  fi
+
+  value="${line#*:}"
+  value="${value%%#*}"
+  value="$(trim_text "${value}")"
+
+  if [[ "${value}" =~ ^\".*\"$ ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+
+  printf "%s" "${value}"
+}
+
+check_camera_sn_config() {
+  local yaml_file="$1"
+  local sn_dot
+  local sn_slash
+
+  if [[ ! -f "${yaml_file}" ]]; then
+    fail "camera_sn check skipped: YAML missing: ${yaml_file}"
+    return
+  fi
+
+  sn_dot="$(extract_yaml_quoted_key_value "${yaml_file}" 'camera_param\.camera_sn')"
+  sn_slash="$(extract_yaml_quoted_key_value "${yaml_file}" 'camera_param/camera_sn')"
+
+  if [[ -z "${sn_dot}" && -z "${sn_slash}" ]]; then
+    fail "camera_sn missing: both \"camera_param.camera_sn\" and \"camera_param/camera_sn\" are empty or absent"
+    return
+  fi
+
+  if [[ -n "${sn_dot}" ]]; then
+    pass "camera_sn present: camera_param.camera_sn=${sn_dot}"
+  else
+    warn "camera_param.camera_sn missing; detector compatibility relies on slash key only"
+  fi
+
+  if [[ -n "${sn_slash}" ]]; then
+    pass "camera_sn present: camera_param/camera_sn=${sn_slash}"
+  else
+    warn "camera_param/camera_sn missing; legacy compatibility relies on dot key only"
+  fi
+
+  if [[ -n "${sn_dot}" && -n "${sn_slash}" ]]; then
+    if [[ "${sn_dot}" == "${sn_slash}" ]]; then
+      pass "camera_sn dual-key values are consistent"
+    else
+      fail "camera_sn mismatch between dot/slash keys: dot=${sn_dot}, slash=${sn_slash}"
+    fi
+  fi
+}
+
+check_legacy_hardcoded_camera_sn() {
+  local hits
+  hits="$(rg -n 'KE[0-9A-Za-z]+' "${ROOT_DIR}/src/shooting_table_calib/launch" --glob '*.launch' --glob '*.launch.py' || true)"
+  if [[ -n "${hits}" ]]; then
+    warn "Legacy launch still contains hardcoded camera SN candidates: ${hits//$'\n'/; }"
+  else
+    pass "No hardcoded camera SN found under shooting_table_calib launch files"
+  fi
+}
+
 run_ros2() {
   timeout "${CMD_TIMEOUT}s" ros2 "$@" 2>/dev/null
 }
@@ -375,6 +454,8 @@ check_file_exists "${ROOT_DIR}/src/behavior_tree/launch/sentry_all.launch.py"
 check_file_exists "${ROOT_DIR}/src/detector/config/auto_aim_config.yaml"
 check_file_exists "${ROOT_DIR}/scripts/start_sentry_all.sh"
 check_file_exists "${ROOT_DIR}/src/behavior_tree/include/BTNodes.hpp"
+check_camera_sn_config "${ROOT_DIR}/src/detector/config/auto_aim_config.yaml"
+check_legacy_hardcoded_camera_sn
 
 if grep -Fq 'BTCPP_format="4"' "${ROOT_DIR}/src/behavior_tree/Scripts/main.xml"; then
   pass "BT XML format is v4"

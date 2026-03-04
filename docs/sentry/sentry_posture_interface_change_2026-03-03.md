@@ -60,10 +60,10 @@
     - `/ly/control/posture`
     - `/ly/gimbal/posture`
 
-- `docs/gimbal_driver.md`
+- `docs/modules/gimbal_driver.md`
   - 增加姿态 Topic 在订阅/发布与注意事项中的说明
 
-- `docs/behavior_tree.md`
+- `docs/modules/behavior_tree.md`
   - 增加姿态控制与回读 Topic 说明
 
 ---

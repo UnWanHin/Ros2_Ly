@@ -394,6 +394,12 @@ namespace LangYa
         int RetryIntervalMs{300};     // 重试间隔
         int MaxRetryCount{3};         // 最大重试次数
         bool OptimisticAck{true};     // 回读缺失时是否乐观确认
+        int TargetKeepMs{800};        // 目标短时丢失容忍，防止姿态抖动
+        int DamageKeepSec{4};         // 最近受击保持时间窗口
+        int LowHealthThreshold{120};  // 低血阈值
+        int VeryLowHealthThreshold{80}; // 极低血阈值
+        int LowAmmoThreshold{30};     // 低弹阈值
+        int ScoreHysteresis{2};       // 姿态切换分差迟滞
     };
 
     // Main

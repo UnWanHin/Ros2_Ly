@@ -1,5 +1,7 @@
 # 系統行為說明
 
+> Legacy：本文件為早期版本分析，僅作對照參考。請優先閱讀 `system_behavior.md`。
+
 ## ❓ 問題：現在 launch 後會自動打嗎？
 
 ### 📋 簡短回答
@@ -26,14 +28,14 @@
 detector → tracker_solver → predictor → gimbal_driver
 ```
 
-**predictor 發布的消息** ([`src/predictor/predictor_node.cpp:153`](src/predictor/predictor_node.cpp:153)):
+**predictor 發布的消息** ([`src/predictor/predictor_node.cpp:153`](../../src/predictor/predictor_node.cpp:153)):
 ```cpp
 if(control_result.valid){
     node.Publisher<ly_predictor_target>()->publish(target_msg);
 }
 ```
 
-**Target 消息內容** ([`src/auto_aim_common/msg/Target.msg`](src/auto_aim_common/msg/Target.msg)):
+**Target 消息內容** ([`src/auto_aim_common/msg/Target.msg`](../../src/auto_aim_common/msg/Target.msg)):
 ```
 bool status      # 是否有效目標
 float32 yaw      # 目標 yaw 角
@@ -48,7 +50,7 @@ float32 pitch    # 目標 pitch 角
 
 #### 2. gimbal_driver 的行為
 
-**訂閱的 Topic** ([`src/gimbal_driver/main.cpp:84-88`](src/gimbal_driver/main.cpp:84)):
+**訂閱的 Topic** ([`src/gimbal_driver/main.cpp:84-88`](../../src/gimbal_driver/main.cpp:84)):
 ```cpp
 GenSub<ly_control_angles>([](GimbalControlData& g, const gimbal_driver::msg::GimbalAngles& m) {
     g.GimbalAngles.Yaw = static_cast<float>(m.yaw);
@@ -81,7 +83,7 @@ GenSub<ly_control_angles>([](GimbalControlData& g, const gimbal_driver::msg::Gim
 
 ### 問題 2: 缺少射擊控制
 
-**gimbal_driver 訂閱的射擊 Topic** ([`src/gimbal_driver/main.cpp:90-93`](src/gimbal_driver/main.cpp:90)):
+**gimbal_driver 訂閱的射擊 Topic** ([`src/gimbal_driver/main.cpp:90-93`](../../src/gimbal_driver/main.cpp:90)):
 ```cpp
 GenSub<ly_control_firecode>([](GimbalControlData& g, const std_msgs::msg::UInt8& m) {
     *reinterpret_cast<std::uint8_t*>(&g.FireCode) = m.data;
