@@ -25,7 +25,8 @@
 
 用途：
 - 车载机执行，检查串口候选设备、权限、网络可达，以及运行时 ROS2 图契约。
-- 会调用 `self_check_sentry.sh --launch` 自动拉起整链路。
+- 会调用 `self_check_sentry.sh --runtime-only --launch` 自动拉起整链路。
+- 默认只跑运行态（`--runtime-only`），避免重复静态检查。
 
 常用命令：
 
@@ -71,3 +72,22 @@
 
 - `FAIL: 0`：通过。
 - `WARN > 0`：可继续，但需确认是否为当前场景预期（如未接网线）。
+- 若使用 `--launch` 且失败，脚本会自动输出 `Launch Diagnosis`，包含崩溃签名与最近日志尾部。
+- 运行前会提示当前配置是否要求“真实相机/真实串口”，避免离车时误用比赛参数。
+
+## 比赛/调试开关位置
+
+统一在：
+
+- `src/detector/config/auto_aim_config.yaml`
+
+重点键位（已在 YAML 内写明“比赛建议/调试建议”注释）：
+
+- `detector_config/use_video`
+- `detector_config/debug_mode`
+- `detector_config/web_show`
+- `detector_config/show`
+- `detector_config/draw`
+- `detector_config/use_ros_bag`
+- `detector_config/save_video`
+- `io_config/use_virtual_device`

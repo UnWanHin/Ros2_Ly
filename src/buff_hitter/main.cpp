@@ -41,6 +41,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <thread>
+#include <filesystem>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
 // TODO copy to auto aim detector
@@ -222,6 +223,18 @@ public:
             udp_enable, web_debug_enable, shoot_enable, record_enable, force_shoot);
 
         std::string buff_model_path = (param["buff"])["buff_model_path"].String();
+        std::filesystem::path model_path(buff_model_path);
+        if (model_path.is_relative() && !std::filesystem::exists(model_path)) {
+            // 优先按工作区根目录解析，避免 launch 工作目录差异导致模型找不到。
+            const auto pkg_share = std::filesystem::path(ament_index_cpp::get_package_share_directory("buff_hitter"));
+            const auto ws_root = pkg_share.parent_path().parent_path().parent_path().parent_path();
+            const auto candidate = ws_root / model_path;
+            if (std::filesystem::exists(candidate)) {
+                model_path = candidate;
+            }
+        }
+        buff_model_path = model_path.string();
+        roslog::info("buff model path: {}", buff_model_path);
         buff_detector_ptr = std::make_shared<BuffDetector>(buff_model_path);  //同下
         buff_calculator_ptr = std::make_shared<BuffCalculator>(param);   //属于solver 越級了, 后面加新模塊buff再移
     }

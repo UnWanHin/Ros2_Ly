@@ -32,7 +32,7 @@ struct Armor {
  */
 class BuffDetector {
     public:
-        BuffDetector(std::string& buff_model_path);
+        explicit BuffDetector(const std::string& buff_model_path);
         bool buffDetect(const cv::Mat& frame);
         void drawTargetPoint(const cv::Point2f& point);
         inline void visualize() { 

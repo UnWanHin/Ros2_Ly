@@ -1,9 +1,19 @@
 #include "../include/Application.hpp"
 #include "../include/BTNodes.hpp"
+#include <cstdlib>
 
 using namespace LangYa;
 
 namespace BehaviorTree {
+
+namespace {
+bool EnvEnabled(const char* key, bool default_value) {
+    const char* v = std::getenv(key);
+    if (!v || !*v) return default_value;
+    const std::string s(v);
+    return s == "1" || s == "true" || s == "TRUE" || s == "on" || s == "ON";
+}
+} // namespace
 
 bool Application::LoadBehaviorTree() noexcept {
     try {
@@ -17,8 +27,26 @@ bool Application::LoadBehaviorTree() noexcept {
 
         BTree = Factory.createTreeFromFile(behavior_tree_file_, GlobalBlackboard_);
 
-        btFileLogger_ = std::make_unique<BT::FileLogger2>(BTree, "behavior_tree_trace.fbl");
-        btGrootPublisher_ = std::make_unique<BT::Groot2Publisher>(BTree, 1667);
+        // 稳定性优先：默认关闭 BT 调试附加器，避免在实机环境引入额外崩溃面。
+        // 如需开启，导出环境变量：
+        //   BT_ENABLE_FILE_LOGGER=1
+        //   BT_ENABLE_GROOT=1
+        if (EnvEnabled("BT_ENABLE_FILE_LOGGER", false)) {
+            try {
+                btFileLogger_ = std::make_unique<BT::FileLogger2>(BTree, "behavior_tree_trace.fbl");
+                LoggerPtr->Info("BT file logger enabled.");
+            } catch (const std::exception& ex) {
+                LoggerPtr->Warning("BT file logger init failed: {}", ex.what());
+            }
+        }
+        if (EnvEnabled("BT_ENABLE_GROOT", false)) {
+            try {
+                btGrootPublisher_ = std::make_unique<BT::Groot2Publisher>(BTree, 1667);
+                LoggerPtr->Info("BT Groot publisher enabled on port 1667.");
+            } catch (const std::exception& ex) {
+                LoggerPtr->Warning("BT Groot publisher init failed: {}", ex.what());
+            }
+        }
 
         return true;
     }

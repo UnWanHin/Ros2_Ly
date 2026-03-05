@@ -226,6 +226,23 @@ trim_text() {
   printf "%s" "${text}"
 }
 
+launch_arg_value() {
+  local key="$1"
+  local default_value="${2:-}"
+  local arg
+  for arg in "${LAUNCH_ARGS[@]}"; do
+    if [[ "${arg}" == "${key}:="* ]]; then
+      printf "%s" "${arg#*=}"
+      return
+    fi
+    if [[ "${arg}" == "--${key}:="* ]]; then
+      printf "%s" "${arg#*=}"
+      return
+    fi
+  done
+  printf "%s" "${default_value}"
+}
+
 extract_yaml_quoted_key_value() {
   local yaml_file="$1"
   local key_pattern="$2"
@@ -302,6 +319,67 @@ check_legacy_hardcoded_camera_sn() {
   else
     pass "No hardcoded camera SN found under shooting_table_calib launch files"
   fi
+}
+
+check_launch_mode_hints() {
+  local default_yaml="${ROOT_DIR}/src/detector/config/auto_aim_config.yaml"
+  local cfg_arg
+  cfg_arg="$(launch_arg_value "config_file" "")"
+  local yaml_file="${cfg_arg:-${default_yaml}}"
+
+  if [[ ! -f "${yaml_file}" ]]; then
+    warn "Launch mode hint skipped: config file not found: ${yaml_file}"
+    return
+  fi
+  info "Launch mode hints based on config: ${yaml_file}"
+
+  local use_video
+  local use_virtual
+  use_video="$(extract_yaml_quoted_key_value "${yaml_file}" 'detector_config/use_video')"
+  use_virtual="$(extract_yaml_quoted_key_value "${yaml_file}" 'io_config/use_virtual_device')"
+
+  if [[ "${use_video}" == "false" ]]; then
+    warn "Current config requires real camera (detector_config/use_video=false). If offline, set true."
+  else
+    pass "Current config uses video input (detector_config/use_video=true)."
+  fi
+
+  if [[ "${use_virtual}" == "false" ]]; then
+    warn "Current config requires real serial device (io_config/use_virtual_device=false). If offline, set true."
+  else
+    pass "Current config uses virtual IO (io_config/use_virtual_device=true)."
+  fi
+}
+
+print_launch_diagnosis() {
+  if [[ -z "${LAUNCH_LOG}" || ! -f "${LAUNCH_LOG}" ]]; then
+    return
+  fi
+  print_section "Launch Diagnosis"
+  local died_lines
+  died_lines="$(grep -E 'process has died|Segmentation fault|Failed to initialize camera|IODevice::MakeDevice|PoseSolver init failed' "${LAUNCH_LOG}" || true)"
+  if [[ -n "${died_lines}" ]]; then
+    warn "Detected crash/error signatures from launch log:"
+    printf "%s\n" "${died_lines}" | sed 's/^/  /'
+  else
+    warn "No explicit crash signature found in launch log. Check full log: ${LAUNCH_LOG}"
+  fi
+
+  if grep -Eq 'getifaddrs: Operation not permitted|Error creating socket: Operation not permitted|Failed to create Shared Memory Manager|Unable to Register SHM Transport|Problem creating RTPSParticipant' "${LAUNCH_LOG}"; then
+    warn "Detected DDS transport permission errors (likely sandbox/container capability issue, not business logic)."
+    info "Run this runtime check on host/robot environment with normal network permissions."
+  fi
+
+  if grep -Eq 'Failed to initialize camera|camera.*not found|camera.*open failed' "${LAUNCH_LOG}"; then
+    warn "Detected camera initialization failure. Confirm camera connection or switch detector_config/use_video=true for offline replay."
+  fi
+
+  if grep -Eq 'IODevice::MakeDevice|ttyACM|ttyUSB|open serial|No such file or directory' "${LAUNCH_LOG}"; then
+    warn "Detected serial/open-device failure. Confirm io_config/use_virtual_device and serial device availability."
+  fi
+
+  info "Recent launch log tail:"
+  tail -n 40 "${LAUNCH_LOG}" | sed 's/^/  /'
 }
 
 run_ros2() {
@@ -509,6 +587,7 @@ if (( STATIC_ONLY == 0 )); then
 fi
 
 if (( STATIC_ONLY == 0 && AUTO_LAUNCH == 1 )); then
+  check_launch_mode_hints
   LAUNCH_LOG="$(mktemp /tmp/sentry_self_check.XXXXXX.log)"
   info "Launching stack by scripts/start_sentry_all.sh (log: ${LAUNCH_LOG})"
   (
@@ -629,6 +708,9 @@ printf "WARN: %d\n" "${WARN_COUNT}"
 printf "FAIL: %d\n" "${FAIL_COUNT}"
 
 if (( FAIL_COUNT > 0 )); then
+  if (( AUTO_LAUNCH == 1 )); then
+    print_launch_diagnosis
+  fi
   printf "%sResult: FAILED%s\n" "${C_RED}" "${C_RESET}"
   exit 1
 fi

@@ -35,6 +35,8 @@ cd ~/ros2_ly_ws_sentary
 ./scripts/self_check_robot.sh
 ```
 
+说明：该脚本默认调用 `self_check_sentry.sh --runtime-only --launch`，只做运行态检查，避免重复静态检查。
+
 常用参数：
 
 ```bash
@@ -70,7 +72,20 @@ cd ~/ros2_ly_ws_sentary
 ./scripts/self_check_sentry.sh --runtime-only --launch --wait 12
 ```
 
-## 4. 判定标准
+当使用 `--launch` 时，若失败会自动打印 `Launch Diagnosis`，给出崩溃签名和最近日志尾部，优先定位相机/串口/进程崩溃。
+
+## 4. 失败快速判读
+
+- 出现 `Failed to initialize camera`：
+  - 离车场景通常是未接相机，改 `detector_config/use_video=true`。
+  - 上车场景检查相机供电、线缆和 SN 配置。
+- 出现 `IODevice::MakeDevice`、`ttyACM/ttyUSB` 打开失败：
+  - 检查串口设备与权限，或离车时改 `io_config/use_virtual_device=true`。
+- 出现 `getifaddrs: Operation not permitted` / `RTPS_TRANSPORT_SHM`：
+  - 多见于受限容器/沙箱，属于 DDS 传输权限问题，不是业务逻辑链路错误。
+  - 需在有正常网络能力的宿主机或车端环境复测。
+
+## 5. 判定标准
 
 - `FAIL=0` 才算通过。
 - `WARN>0` 可继续，但要逐条确认是否为当前场景预期（如未接网线导致 192.168.12.1 不通）。

@@ -106,7 +106,7 @@ else
   warn "192.168.12.1 unreachable (may be normal if network not connected yet)"
 fi
 
-SELF_CHECK_ARGS=(--launch --wait "${WAIT_SECONDS}")
+SELF_CHECK_ARGS=(--runtime-only --launch --wait "${WAIT_SECONDS}")
 if (( WITH_HZ == 0 )); then
   SELF_CHECK_ARGS+=(--skip-hz)
 fi

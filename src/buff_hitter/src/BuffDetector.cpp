@@ -1,4 +1,6 @@
 #include "BuffDetector.hpp"
+#include <filesystem>
+#include <stdexcept>
 
 namespace power_rune {
 
@@ -12,12 +14,15 @@ namespace power_rune {
 // BuffDetector::createBuffDetector(const std::string &buff_model_path) {
 //     return BuffDetector::buffDetector;
 // }
-BuffDetector :: BuffDetector(std::string& buff_model_path){
+BuffDetector::BuffDetector(const std::string& buff_model_path){
     m_buff_model_path = buff_model_path;            
+    if (!std::filesystem::exists(m_buff_model_path)) {
+        throw std::runtime_error("BuffDetector model file not found: " + m_buff_model_path);
+    }
     core = ov::Core();
     compiled_model = core.compile_model(m_buff_model_path, "CPU", ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
     request = compiled_model.create_infer_request();
-};
+}
 
 /**
  * @brief 检测箭头，装甲板和中心。如果所有检测均成功，则返回 true，否则返回 false。

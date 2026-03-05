@@ -35,12 +35,17 @@ docs/
 [sentry/sentry_posture_interface_change_2026-03-03.md](sentry/sentry_posture_interface_change_2026-03-03.md)
 5. 落地执行与上车前检查  
 [guides/config_setup_guide.md](guides/config_setup_guide.md)  
+[guides/auto_aim_tuning_handover.md](guides/auto_aim_tuning_handover.md)  
+[guides/auto_aim_yamlization_checklist.md](guides/auto_aim_yamlization_checklist.md)  
 [guides/self_check_dual_suite.md](guides/self_check_dual_suite.md)  
 [guides/module_standalone_test.md](guides/module_standalone_test.md)  
 [guides/test_guide.md](guides/test_guide.md)  
 [guides/preflight_checklist.md](guides/preflight_checklist.md)
 6. 近期稳定性修复记录（接口不变）  
 [reports/stability_fix_no_interface_change_2026-03-05.md](reports/stability_fix_no_interface_change_2026-03-05.md)
+[reports/self_check_status_2026-03-05.md](reports/self_check_status_2026-03-05.md)
+[reports/repository_completeness_audit_2026-03-05.md](reports/repository_completeness_audit_2026-03-05.md)
+[reports/full_link_audit_2026-03-05.md](reports/full_link_audit_2026-03-05.md)
 
 ## 分类说明
 
