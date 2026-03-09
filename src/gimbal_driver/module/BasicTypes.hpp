@@ -159,17 +159,9 @@ namespace LangYa
         VelocityType Velocity;
         GimbalAnglesType GimbalAngles;
         FireCodeType FireCode;
+        std::uint8_t Posture{0}; // 0=保留, 1=进攻, 2=防御, 3=移动
         std::uint8_t Tail{ 0 };
     };
-
-    // 姿态下行独立命令（不改 GimbalControlData 包长，保证旧链路兼容）
-    struct PostureControlPayload
-    {
-        std::uint8_t Posture{0}; // 0=保留, 1=进攻, 2=防御, 3=移动
-    };
-
-    using PostureControlMessage = TypedMessage<sizeof(PostureControlPayload)>;
-    inline constexpr std::uint8_t PostureControlTypeID = 7;
 
     struct BuffType{
         std::uint8_t reserve;

@@ -76,9 +76,9 @@ namespace
         std::atomic_bool DeviceError{ false };
         IODevice<TypedMessage<sizeof(GimbalData)>, GimbalControlData> Device{};
         MultiCallback<GimbalControlData> CallbackGenerator;
+        GimbalControlData controlShadow_{};
         std::uint8_t postureCommand_{0}; // 0=不控制, 1=进攻, 2=防御, 3=移动
         std::uint8_t postureState_{0};   // 0=未知, 1=进攻, 2=防御, 3=移动
-        std::uint8_t postureTxTypeID_{PostureControlTypeID};
         int postureTxRepeatCount_{3};
         std::chrono::milliseconds postureTxInterval_{20};
         std::uint8_t posturePendingToSend_{0};
@@ -102,8 +102,8 @@ namespace
             posturePendingToSend_ = posture;
             posturePendingRepeat_ = std::max(1, postureTxRepeatCount_);
             postureNextSendTime_ = std::chrono::steady_clock::now();
-            roslog::info("Posture TX armed: cmd=%u, repeat=%d, type_id=%u",
-                         posturePendingToSend_, posturePendingRepeat_, postureTxTypeID_);
+            roslog::info("Posture TX armed: cmd=%u, repeat=%d",
+                         posturePendingToSend_, posturePendingRepeat_);
         }
 
         void MaybeSendPostureTx() {
@@ -115,14 +115,13 @@ namespace
                 return;
             }
 
-            PostureControlMessage frame{};
-            frame.TypeID = postureTxTypeID_;
-            frame.Data[0] = posturePendingToSend_;
-            frame.Tail = 0;
-            if (!Device.WriteRaw(frame)) {
+            auto tx = controlShadow_;
+            tx.Posture = posturePendingToSend_;
+            if (!Device.Write(tx)) {
                 DeviceError = true;
                 return;
             }
+            controlShadow_ = tx;
 
             posturePendingRepeat_--;
             postureNextSendTime_ = now + postureTxInterval_;
@@ -163,24 +162,24 @@ namespace
                                        g.Velocity.Y = static_cast<int8_t>(m.y);
                                    });
 
-            // 姿态控制单独走 Topic，不复用当前串口写结构，避免改包长导致链路不兼容。
-            Node.GenSubscriber<ly_control_posture>(
-                [this](ly_control_posture::CallbackArg m)
-                {
-                    const auto cmd = m->data;
-                    if (cmd != 0 && !IsValidPosture(cmd)) {
-                        roslog::warn("Invalid /ly/control/posture: %u (expect 0/1/2/3)", cmd);
-                        return;
-                    }
-                    postureCommand_ = cmd;
-                    // 在下位机尚未回传姿态前，先把控制量透传到 /ly/gimbal/posture 便于联调。
-                    PublishPosture(postureCommand_);
-                    if (cmd == 0) {
-                        posturePendingRepeat_ = 0;
-                        return;
-                    }
-                    ArmPostureTx(cmd);
-                });
+            GenSub<ly_control_posture>([this](GimbalControlData& g, const std_msgs::msg::UInt8& m)
+                                       {
+                                           const auto cmd = m.data;
+                                           if (cmd != 0 && !IsValidPosture(cmd)) {
+                                               roslog::warn("Invalid /ly/control/posture: %u (expect 0/1/2/3)", cmd);
+                                               return;
+                                           }
+                                           postureCommand_ = cmd;
+                                           g.Posture = cmd;
+                                           // 在下位机尚未回传姿态前，先把控制量透传到 /ly/gimbal/posture 便于联调。
+                                           PublishPosture(postureCommand_);
+                                           if (cmd == 0) {
+                                               posturePendingRepeat_ = 0;
+                                               posturePendingToSend_ = 0;
+                                               return;
+                                           }
+                                           ArmPostureTx(cmd);
+                                       });
         }
 
         void  PubGimbalData(const GimbalData& data)
@@ -433,7 +432,6 @@ namespace
 
         void TestVirtualLoopback(){
             TypedMessage<sizeof(GimbalData)> test_msg{};
-            TypedMessage<sizeof(GimbalControlData)> test_msg3{};
             GimbalControlData test_msg2{};
             test_msg.TypeID = GimbalData::TypeID;
             test_msg.GetDataAs<GimbalData>().GimbalAngles.Yaw = 45.0f;
@@ -450,7 +448,12 @@ namespace
 
     public:
         Application() noexcept : CallbackGenerator{
-                [this](const auto& data) { if (DeviceError) return; if (!Device.Write(data)) DeviceError = true; }
+                [this](const auto& data)
+                {
+                    controlShadow_ = data;
+                    if (DeviceError) return;
+                    if (!Device.Write(data)) DeviceError = true;
+                }
         }
         {
         }
@@ -467,18 +470,11 @@ namespace
             Node.GetParam<bool>("io_config/use_virtual_device", useVirtualDevice, false);
             Node.GetParam<std::string>("io_config/device_name", serialDeviceName, std::string{"/dev/ttyACM0"});
             Node.GetParam<int>("io_config/baud_rate", serialBaudRate, 115200);
-            int postureTypeId = static_cast<int>(postureTxTypeID_);
             int postureRepeatCount = postureTxRepeatCount_;
             int postureRepeatIntervalMs = static_cast<int>(postureTxInterval_.count());
-            Node.GetParam<int>("io_config/posture_type_id", postureTypeId, postureTypeId);
             Node.GetParam<int>("io_config/posture_repeat_count", postureRepeatCount, postureRepeatCount);
             Node.GetParam<int>("io_config/posture_repeat_interval_ms", postureRepeatIntervalMs, postureRepeatIntervalMs);
 
-            if (postureTypeId < 0 || postureTypeId > 255) {
-                roslog::warn("Invalid posture_type_id=%d, fallback to %u",
-                             postureTypeId, static_cast<unsigned int>(PostureControlTypeID));
-                postureTypeId = static_cast<int>(PostureControlTypeID);
-            }
             if (postureRepeatCount <= 0) {
                 roslog::warn("Invalid posture_repeat_count=%d, fallback to 3", postureRepeatCount);
                 postureRepeatCount = 3;
@@ -489,11 +485,10 @@ namespace
                 postureRepeatIntervalMs = 20;
             }
 
-            postureTxTypeID_ = static_cast<std::uint8_t>(postureTypeId);
             postureTxRepeatCount_ = postureRepeatCount;
             postureTxInterval_ = std::chrono::milliseconds(postureRepeatIntervalMs);
-            roslog::warn("posture_tx fixed mode: type_id=%u repeat_count=%d repeat_interval_ms=%d",
-                         postureTxTypeID_, postureTxRepeatCount_,
+            roslog::warn("posture_tx merged mode: repeat_count=%d repeat_interval_ms=%d",
+                         postureTxRepeatCount_,
                          static_cast<int>(postureTxInterval_.count()));
 
             while (rclcpp::ok())
@@ -502,7 +497,9 @@ namespace
                 std::this_thread::sleep_for(1s);
                 if (!Device.Initialize(useVirtualDevice, serialDeviceName, serialBaudRate)) continue;
                 DeviceError = false;
+                posturePendingRepeat_ = 0;
                 postureLastSent_ = 0;
+                controlShadow_.Posture = IsValidPosture(postureCommand_) ? postureCommand_ : 0;
                 if (IsValidPosture(postureCommand_)) {
                     ArmPostureTx(postureCommand_);
                 }

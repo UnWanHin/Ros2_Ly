@@ -458,6 +458,36 @@ check_node_online() {
   fi
 }
 
+resolve_node_alias() {
+  local candidates_csv="$1"
+  local node_list="$2"
+  local cand
+
+  IFS=',' read -r -a _candidates <<< "${candidates_csv}"
+  for cand in "${_candidates[@]}"; do
+    [[ -z "${cand}" ]] && continue
+    if grep -Fxq "${cand}" <<< "${node_list}"; then
+      printf "%s" "${cand}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+check_node_online_alias() {
+  local label="$1"
+  local candidates_csv="$2"
+  local node_list="$3"
+  local resolved
+
+  resolved="$(resolve_node_alias "${candidates_csv}" "${node_list}" || true)"
+  if [[ -n "${resolved}" ]]; then
+    pass "Node online: ${resolved} (${label})"
+  else
+    fail "Node missing: ${label} (candidates: ${candidates_csv})"
+  fi
+}
+
 check_node_sub() {
   local node="$1"
   local topic="$2"
@@ -630,11 +660,15 @@ fi
 if (( STATIC_ONLY == 0 )); then
   NODE_LIST="$(run_ros2 node list || true)"
   GRAPH_AVAILABLE=1
+  OUTPOST_NODE=""
+  BUFF_NODE=""
   if [[ -z "${NODE_LIST}" ]]; then
     fail "No ROS2 nodes found. Start stack first or run with --launch"
     GRAPH_AVAILABLE=0
   else
     pass "ROS2 graph has active nodes"
+    OUTPOST_NODE="$(resolve_node_alias "/outpost_hitter,/outpost_hitter_node" "${NODE_LIST}" || true)"
+    BUFF_NODE="$(resolve_node_alias "/buff_hitter,/ra_hitter,/buff_hitter_node" "${NODE_LIST}" || true)"
   fi
 
   if (( GRAPH_AVAILABLE == 1 )); then
@@ -642,8 +676,8 @@ if (( STATIC_ONLY == 0 )); then
   check_node_online "/detector" "${NODE_LIST}"
   check_node_online "/tracker_solver" "${NODE_LIST}"
   check_node_online "/predictor_node" "${NODE_LIST}"
-  check_node_online "/outpost_hitter" "${NODE_LIST}"
-  check_node_online "/buff_hitter" "${NODE_LIST}"
+  check_node_online_alias "outpost_hitter" "/outpost_hitter,/outpost_hitter_node" "${NODE_LIST}"
+  check_node_online_alias "buff_hitter" "/buff_hitter,/ra_hitter,/buff_hitter_node" "${NODE_LIST}"
   check_node_online "/behavior_tree" "${NODE_LIST}"
 
   print_section "Node Contracts"
@@ -667,10 +701,18 @@ if (( STATIC_ONLY == 0 )); then
   check_node_sub "/predictor_node" "/ly/bullet/speed" hard
 
   # outpost/buff
-  check_node_sub "/outpost_hitter" "/ly/outpost/armors" hard
-  check_node_sub "/buff_hitter" "/ly/ra/enable" hard
-  check_node_sub "/buff_hitter" "/ly/aa/enable" hard
-  check_node_sub "/buff_hitter" "/ly/ra/angle_image" hard
+  if [[ -n "${OUTPOST_NODE}" ]]; then
+    check_node_sub "${OUTPOST_NODE}" "/ly/outpost/armors" hard
+  else
+    warn "Skip outpost subscriber contract checks: node offline"
+  fi
+  if [[ -n "${BUFF_NODE}" ]]; then
+    check_node_sub "${BUFF_NODE}" "/ly/ra/enable" hard
+    check_node_sub "${BUFF_NODE}" "/ly/aa/enable" hard
+    check_node_sub "${BUFF_NODE}" "/ly/ra/angle_image" hard
+  else
+    warn "Skip buff subscriber contract checks: node offline"
+  fi
 
   # behavior_tree inputs
   check_node_sub "/behavior_tree" "/ly/gimbal/angles" hard
@@ -698,8 +740,8 @@ if (( STATIC_ONLY == 0 )); then
   check_topic_link "/ly/control/vel" "gimbal_driver/msg/Vel" "/behavior_tree" "/gimbal_driver" hard
 
   check_topic_link "/ly/bt/target" "std_msgs/msg/UInt8" "/behavior_tree" "/detector,/predictor_node" hard
-  check_topic_link "/ly/aa/enable" "std_msgs/msg/Bool" "/behavior_tree" "/detector,/buff_hitter" hard
-  check_topic_link "/ly/ra/enable" "std_msgs/msg/Bool" "/behavior_tree" "/detector,/buff_hitter" hard
+  check_topic_link "/ly/aa/enable" "std_msgs/msg/Bool" "/behavior_tree" "/detector,${BUFF_NODE:-/buff_hitter}" hard
+  check_topic_link "/ly/ra/enable" "std_msgs/msg/Bool" "/behavior_tree" "/detector,${BUFF_NODE:-/buff_hitter}" hard
   check_topic_link "/ly/outpost/enable" "std_msgs/msg/Bool" "/behavior_tree" "/detector" hard
 
   print_section "Conditional Topics (Data-Dependent)"
@@ -707,10 +749,10 @@ if (( STATIC_ONLY == 0 )); then
   check_topic_link "/ly/detector/armors" "auto_aim_common/msg/Armors" "/detector" "/tracker_solver,/behavior_tree" warn
   check_topic_link "/ly/tracker/results" "auto_aim_common/msg/Trackers" "/tracker_solver" "/predictor_node" warn
   check_topic_link "/ly/predictor/target" "auto_aim_common/msg/Target" "/predictor_node" "/behavior_tree" warn
-  check_topic_link "/ly/ra/angle_image" "auto_aim_common/msg/AngleImage" "/detector" "/buff_hitter" warn
-  check_topic_link "/ly/buff/target" "auto_aim_common/msg/Target" "/buff_hitter" "/behavior_tree" warn
-  check_topic_link "/ly/outpost/armors" "auto_aim_common/msg/Armors" "/detector" "/outpost_hitter" warn
-  check_topic_link "/ly/outpost/target" "auto_aim_common/msg/Target" "/outpost_hitter" "/behavior_tree" warn
+  check_topic_link "/ly/ra/angle_image" "auto_aim_common/msg/AngleImage" "/detector" "${BUFF_NODE:-/buff_hitter}" warn
+  check_topic_link "/ly/buff/target" "auto_aim_common/msg/Target" "${BUFF_NODE:-/buff_hitter}" "/behavior_tree" warn
+  check_topic_link "/ly/outpost/armors" "auto_aim_common/msg/Armors" "/detector" "${OUTPOST_NODE:-/outpost_hitter}" warn
+  check_topic_link "/ly/outpost/target" "auto_aim_common/msg/Target" "${OUTPOST_NODE:-/outpost_hitter}" "/behavior_tree" warn
 
   if (( SKIP_HZ == 0 )); then
     print_section "Frequency Checks"

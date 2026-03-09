@@ -4,10 +4,10 @@
 
 `behavior_tree` 是整個系統的**大腦/決策中心**，負責：
 1. 匯總所有感知數據（来自 `gimbal_driver`：比賽狀態、血量；来自 `predictor/outpost_hitter/buff_hitter`：瞄準指令）
-2. 運行決策邏輯（目前是硬編碼的策略函數，BT樹只部分使用）
+2. 運行決策邏輯（BehaviorTree.CPP v4 行為樹 + 姿態決策節點）
 3. 向 `gimbal_driver` 發送最終的雲台控制指令、開火碼、導航指令
 
-> ⚠️ **重構說明**：這個節點目前是 **ROS1 → ROS2 遷移版本**，BT 行為樹（`BTree.tickRoot()`）在代碼中已被注釋掉，實際運行的是一組硬編碼的策略函數（`SetAimMode()`、`SetAimTarget()`、`SetPositionRepeat()` 等）。你的目標是重構為 BehaviorTree v4 + 雙黑板架構。
+> 当前状态：主循環使用 `rclcpp::ok()`，並在每輪執行 `BTree.tickWhileRunning(...)`。
 
 ---
 
@@ -19,7 +19,7 @@ behavior_tree/
 ├── package.xml
 ├── main.cpp                    # 入口，創建 Application 並 Run()
 ├── Scripts/
-│   ├── main.xml                # BT 行為樹 XML 文件（目前基本未被 tickRoot 執行）
+│   ├── main.xml                # BT v4 行為樹主文件
 │   └── config.json             # 策略配置文件
 ├── include/
 │   ├── Application.hpp         # 核心類：所有狀態變量 + 所有函數聲明
@@ -48,6 +48,21 @@ behavior_tree/
 └── Logger/                     # 日誌系統（第三方或自實現）
     └── （多個頭文件和src）
 ```
+
+---
+
+## BT v4 依赖策略（2026-03）
+
+- `CMake` 固定從工作區 `third_party/behaviortree_cpp_v4/install` 查找 BT v4：
+  - `src/behavior_tree/CMakeLists.txt:18`
+- `find_package(behaviortree_cpp ... NO_DEFAULT_PATH)`，禁用系統路徑回退：
+  - `src/behavior_tree/CMakeLists.txt:39`
+- 強制版本檢查 `>= 4.0.0`：
+  - `src/behavior_tree/CMakeLists.txt:44`
+- 可執行檔 RPATH 固定到 pinned BT 路徑：
+  - `src/behavior_tree/CMakeLists.txt:90`
+- `package.xml` 不再聲明 `behaviortree_cpp` 直接 `<depend>`，由 CMake pinned 路徑控制鏈接來源：
+  - `src/behavior_tree/package.xml:1`
 
 ---
 
@@ -127,16 +142,12 @@ Run()
 #### `GameLoop()` — 主循環
 
 ```cpp
-while (ros::ok()) {
-    TransportData();           // 從黑板讀取決策結果，發布控制數據
-    treeTickRateClock.sleep(); // 頻率控制（100Hz）
-    ros::spinOnce();           // 處理所有回調（更新感知數據）
-    UpdateBlackBoard();        // 把感知數據寫入 BT 黑板
-    TreeTick();                // 執行決策邏輯
+while (rclcpp::ok()) {
+    rclcpp::spin_some(node_);                 // 處理回調
+    const auto status = BTree.tickWhileRunning(std::chrono::milliseconds(1));
+    treeTickRateClock.sleep();                // 頻率控制
 }
 ```
-
-> ⚠️ **注意**：`while (ros::ok())` 仍然是 **ROS1 語法**，應改為 `rclcpp::ok()`。這是遷移時遺留下來的 bug。
 
 #### `UpdateBlackBoard()` — 把感知數據寫黑板
 
@@ -154,16 +165,13 @@ BlackBoard->set("ArmorList", armorList);
 BlackBoard->set("TeamBuff", teamBuff);
 ```
 
-#### `TreeTick()` — 決策邏輯（目前是硬編碼函數集）
+#### `TreeTick()` — BT 根節點調度
 
 ```cpp
 void TreeTick() {
-    SetAimMode();          // 決定 aimMode（Buff/Outpost/RotateScan）
-    CheckDebug();          // 處理調試開關（強制某種模式）
-    ProcessData();         // 預處理：填充 hitableTargets、reliableEnemyPosition
-    SetPositionRepeat();   // 導航決策（按 config 策略選擇）
-    SetAimTarget();        // 選擇瞄準目標裝甲板類型
-    // BTree.tickRoot();   ← 已注釋，實際未執行
+    if (BTree.subtrees.empty()) return;
+    const auto status = BTree.tickWhileRunning(std::chrono::milliseconds(1));
+    if (status == BT::NodeStatus::FAILURE) { ... }
 }
 ```
 
@@ -281,18 +289,7 @@ SET_POSITION(BuffShoot, MyTeam);  // 設置導航目標為打符點位
 
 ---
 
-## 雙黑板重構方向（你的計劃）
+## 黑板与后续方向
 
-當前問題：
-- `while (ros::ok())` 是 ROS1 殘留
-- `BTree.tickRoot()` 被注釋掉，BT 樹未真正運行
-- 所有狀態集中在 `Application` 單一類，難以維護
-
-你的目標 —— **BehaviorTree v4 + 雙黑板**：
-
-| 黑板 | 存儲的數據 | 更新來源 |
-|------|-----------|----------|
-| **感知黑板（Blackboard_Perception）** | 所有從 ROS 訂閱回調更新的數據（血量、比賽時間、敵人位置、瞄準結果） | `SubscribeMessageAll()` 回調直接寫入 |
-| **決策黑板（Blackboard_Decision）** | 所有 BT 樹決策輸出（目標裝甲板類型、導航目標、模式） | BT 節點執行後寫入 |
-
-這樣的好處：BT 節點只讀感知黑板，結果寫決策黑板，解耦清晰，易於擴展新的 BT 節點。
+当前实现已使用 BT v4 主树执行，且在运行期维护全局黑板与 tick 黑板。  
+后续若继续拆分，可沿「感知黑板 / 决策黑板」分层，以降低 `Application` 聚合状态复杂度。

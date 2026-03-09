@@ -91,7 +91,7 @@ main()
 | `PositionData` | `PubPositionData()` | `/ly/position/data`, `/ly/me/uwb_pos`, `/ly/bullet/speed` |
 | `ExtendData` | `PubExtendData()` | `/ly/me/uwb_yaw`, `/ly/gimbal/posture` |
 
-#### 「寫入」路徑：`GenSubs()` → `Device.Write()/WriteRaw()`
+#### 「寫入」路徑：`GenSubs()` → `Device.Write()`
 
 訂閱上層控制指令，寫入共享的 `GimbalControlData` 結構體，然後由 `CallbackGenerator` 觸發寫入串口：
 
@@ -100,12 +100,12 @@ main()
 | `/ly/control/angles` (`GimbalAngles`) | `GimbalControlData.GimbalAngles.Yaw/Pitch` | 期望雲台角 |
 | `/ly/control/firecode` (`UInt8`) | `GimbalControlData.FireCode` | 開火指令、旋轉模式 |
 | `/ly/control/vel` (`Vel`) | `GimbalControlData.Velocity.X/Y` | 底盤速度（導航用） |
-| `/ly/control/posture` (`UInt8`) | `postureCommand_` + 獨立姿態幀 | 姿態指令（0=不控制, 1=進攻, 2=防禦, 3=移動） |
+| `/ly/control/posture` (`UInt8`) | `GimbalControlData.Posture` | 姿態指令（0=保留, 1=進攻, 2=防禦, 3=移動） |
 
-姿態下發採用「獨立下行幀」策略：
-- 不改既有 `GimbalControlData` 包長（舊下位機兼容）
-- 收到有效姿態命令（1/2/3）後由 `WriteRaw()` 下發 `PostureControlMessage`（`TypeID=7`，payload 1 byte posture）
-- 失聯重連後會自動重發當前姿態
+姿態下發採用「主控制幀並入字段」策略：
+- `Posture` 並入 `GimbalControlData`，與角度/速度/火控同包下發
+- 收到有效姿態命令（1/2/3）後更新 `Posture` 字段並按配置重發
+- 失聯重連後會按當前姿態重發
 
 ---
 
@@ -116,8 +116,7 @@ main()
 | 結構體 | 說明 |
 |--------|------|
 | `GimbalData` | 電控→上位機：雲台角、速度、開火狀態等 |
-| `GimbalControlData` | 上位機→電控：期望雲台角、開火指令、速度 |
-| `PostureControlMessage` | 上位機→電控：姿態獨立命令幀（`TypeID=7`，`Data[0]=posture`） |
+| `GimbalControlData` | 上位機→電控：期望雲台角、開火指令、速度、姿態 |
 | `GameData` | 裁判系統數據：比賽狀態、血量、子彈數、時間 |
 | `HealthMyselfData` / `HealthEnemyData` | 我方/敵方各機器人血量 |
 | `RFIDAndBuffData` | RFID狀態 + 能量機關增益（防禦、攻擊、回血等） |
@@ -134,7 +133,7 @@ template<typename ReadType, typename WriteType>
 class IODevice {
     bool Initialize(bool useVirtualDevice = false);  // 打開串口（或虛擬迴環）
     bool Write(const WriteType& data);               // 寫入電控
-    bool WriteRaw(const OtherType& data);            // 寫入任意二進制幀（姿態獨立幀使用）
+    bool WriteRaw(const OtherType& data);            // 寫入任意二進制幀（通用接口）
     void LoopRead(std::atomic_bool& error, std::function<void(const ReadType&)> callback);  // 持續讀取
 };
 ```
@@ -230,20 +229,20 @@ class IODevice {
 | `/ly/control/vel` | `Vel` | 接收速度指令（導航） |
 | `/ly/control/posture` | `UInt8` | 接收姿態指令（上位決策輸入） |
 
-### 姿態下發固定协議
+### 姿態下發参数
 
 | 字段 | 固定值 | 说明 |
 |---|---:|---|
-| `TypeID` | `7` | 姿态独立幀 ID（需下位机按此解析） |
 | `repeat_count` | `3` | 每次切换默认重发 3 次 |
 | `repeat_interval_ms` | `20` | 重发间隔 20ms |
+| `field` | `GimbalControlData.Posture` | 姿态并入主控制幀字段 |
 
 ---
 
 ## 修改注意事項
 
 - **串口協議調整**：修改 `module/BasicTypes.hpp` 的結構體時一定要注意字節對齊和電控端的協議版本一致
-- **姿態指令兼容策略**：姿態不併入 `GimbalControlData`；改用固定 `TypeID=7` 獨立幀，對舊主包零影響
+- **姿態指令協議策略**：姿態併入 `GimbalControlData.Posture`，主包長度變更需與下位機同步升級
 - **新增 Topic**：在 `main.cpp` 增加 `LY_DEF_ROS_TOPIC` 定義和對應的 `Pub*()` 函數，並在 `LoopRead()` 的 switch-case 中處理
 - **`/ly/bullet/speed`**：子彈速度從 `PositionData` 解析，換算公式為 `data.BulletSpeed / 100.0f`（原始值為 cm/s × 100 的整數）
 - **虛擬設備**：調試時可設置 YAML 參數 `io_config/use_virtual_device: true` 來使用迴環模式而無需電控硬件
