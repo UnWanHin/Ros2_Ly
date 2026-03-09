@@ -250,20 +250,59 @@ namespace BehaviorTree {
         UpdateBlackBoard();
 
         while (rclcpp::ok()) {
+            MarkLoopBeat();
             rclcpp::spin_some(node_); // 处理回调函数
+
+            if (TryHandleSoftRecovery()) {
+                treeTickRateClock.sleep();
+                continue;
+            }
+
+            if (IsCriticalInputStale()) {
+                static auto last_stale_log = std::chrono::steady_clock::time_point{};
+                const auto now = std::chrono::steady_clock::now();
+                if (LoggerPtr && (now - last_stale_log > std::chrono::seconds(2))) {
+                    LoggerPtr->Warning("Critical input stale: gimbal angles > {} ms, publish safe-control.",
+                                       kRuntimeGimbalStaleMs);
+                    last_stale_log = now;
+                }
+                PublishSafeControl("gimbal_stale");
+                treeTickRateClock.sleep();
+                continue;
+            }
+
             const auto now = std::chrono::steady_clock::now();
             if (now - lastTreeTickLogTime_ > std::chrono::seconds(2)) {
                 LoggerPtr->Debug("BehaviorTree Root Tick...");
                 lastTreeTickLogTime_ = now;
             }
-            TreeTick();
+            TreeTickGuarded();
             treeTickRateClock.sleep();
         }
+    }
+
+    void Application::TreeTickGuarded() {
+        MarkTickStart();
+        try {
+            TreeTick();
+        } catch (const std::exception& ex) {
+            if (LoggerPtr) {
+                LoggerPtr->Error("BehaviorTree tick exception: {}", ex.what());
+            }
+            RequestSoftRecovery(RuntimeFaultCode::TreeException);
+        } catch (...) {
+            if (LoggerPtr) {
+                LoggerPtr->Error("BehaviorTree tick exception: <unknown>");
+            }
+            RequestSoftRecovery(RuntimeFaultCode::TreeException);
+        }
+        MarkTickEnd();
     }
 
     void Application::TreeTick() {
         if (BTree.subtrees.empty()) {
             LoggerPtr->Error("BehaviorTree is empty, skip tick.");
+            RequestSoftRecovery(RuntimeFaultCode::TreeEmpty);
             return;
         }
 

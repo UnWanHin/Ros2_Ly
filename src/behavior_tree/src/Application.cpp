@@ -96,10 +96,19 @@ namespace BehaviorTree {
         }
         BT_DIAG_LOG("[BT_DIAG] tree loaded\n");
 
+        const auto now_ns = NowSteadyNs();
+        runtimeLastLoopBeatNs_.store(now_ns, std::memory_order_relaxed);
+        runtimeTickStartNs_.store(now_ns, std::memory_order_relaxed);
+        runtimeTickEndNs_.store(now_ns, std::memory_order_relaxed);
+        runtimeLastSafePublishNs_.store(0, std::memory_order_relaxed);
+        runtimeRecoveryWindowStart_ = std::chrono::steady_clock::now();
+        runtimeLastSoftRecoverTime_ = std::chrono::steady_clock::time_point{};
+
         LoggerPtr->Info("Application Start!");
     }
 
     Application::~Application() {
+        StopRuntimeGuard();
         if(LoggerPtr) {
             LoggerPtr->Info("Application Stop!");
             LoggerPtr->Flush();
@@ -114,7 +123,11 @@ namespace BehaviorTree {
         // 2. 記錄比賽開始時間
         gameStartTime = std::chrono::steady_clock::now();
 
+        StartRuntimeGuard();
+
         // 3. 進入主循環 (處理業務邏輯和 BT Tick)
         GameLoop();
+
+        StopRuntimeGuard();
     }
 }

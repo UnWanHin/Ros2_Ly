@@ -16,6 +16,9 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <string>
+#include <atomic>
+#include <thread>
+#include <mutex>
 
 #include "Utils/Logger.hpp"
 
@@ -39,6 +42,14 @@ using namespace Utils::Logger;
 using json = nlohmann::json;
 
 namespace BehaviorTree {
+
+enum class RuntimeFaultCode : std::uint8_t {
+    None = 0,
+    LoopStall = 1,
+    TickStall = 2,
+    TreeEmpty = 3,
+    TreeException = 4
+};
 
 enum class StrategyMode : std::uint8_t {
     HitSentry = 0,
@@ -139,6 +150,31 @@ private:
     TimerClock naviCommandIntervalClock{Seconds{10}}, recoveryClock{Seconds{90}}; // 控制间隔，回家时间 
     std::uint8_t speedLevel{1}; // 0 没电, 1 正常, 2 快速
     StrategyMode strategyMode_{StrategyMode::HitHero}; // 当前策略
+
+    // ==========================================
+    // Runtime Guard (L1/L2)
+    // ==========================================
+    std::thread runtimeGuardThread_{};
+    std::atomic<bool> runtimeGuardStop_{false};
+    std::atomic<bool> runtimeRecoveryRequested_{false};
+    std::atomic<RuntimeFaultCode> runtimeFaultCode_{RuntimeFaultCode::None};
+    std::atomic<bool> runtimeTickInProgress_{false};
+    std::atomic<std::int64_t> runtimeLastLoopBeatNs_{0};
+    std::atomic<std::int64_t> runtimeTickStartNs_{0};
+    std::atomic<std::int64_t> runtimeTickEndNs_{0};
+    std::atomic<std::int64_t> runtimeLastSafePublishNs_{0};
+    std::mutex runtimeRecoveryMutex_{};
+    bool runtimeRecovering_{false};
+    std::chrono::steady_clock::time_point runtimeRecoveryWindowStart_{};
+    std::chrono::steady_clock::time_point runtimeLastSoftRecoverTime_{};
+    int runtimeRecoveryCountInWindow_{0};
+    static constexpr int kRuntimeLoopStallMs = 1500;
+    static constexpr int kRuntimeTickStallMs = 800;
+    static constexpr int kRuntimeGimbalStaleMs = 1200;
+    static constexpr int kRuntimeRecoveryWindowSec = 60;
+    static constexpr int kRuntimeRecoveryLimit = 3;
+    static constexpr int kRuntimeRecoveryMinIntervalMs = 1500;
+    static constexpr int kRuntimeSafePublishMinIntervalMs = 200;
 
     BT::Blackboard::Ptr GlobalBlackboard_ = BT::Blackboard::create(); // 跨 tick 持久黑板
     BT::Blackboard::Ptr TickBlackboard_ = BT::Blackboard::create();   // 每次 tick 中间黑板
@@ -257,6 +293,7 @@ public:
     void TransportData();
     void PublishTogether();
     void TreeTick();
+    void TreeTickGuarded();
     void ProcessData();
     bool CheckPositionRecovery();
     void SetPositionRepeat();
@@ -285,6 +322,19 @@ public:
 
     // 获取配置文件
     bool ConfigurationInit();
+    void StartRuntimeGuard();
+    void StopRuntimeGuard();
+    void RuntimeGuardLoop();
+    void RequestSoftRecovery(RuntimeFaultCode code) noexcept;
+    bool TryHandleSoftRecovery();
+    bool TrySoftReloadBehaviorTree(RuntimeFaultCode code);
+    bool IsCriticalInputStale() const;
+    void PublishSafeControl(const char* reason, bool from_guard_thread = false) noexcept;
+    void MarkLoopBeat() noexcept;
+    void MarkTickStart() noexcept;
+    void MarkTickEnd() noexcept;
+    static std::int64_t NowSteadyNs() noexcept;
+    static const char* RuntimeFaultCodeToString(RuntimeFaultCode code) noexcept;
 
     StrategyMode GetStrategyMode() const noexcept { return strategyMode_; }
     void SetStrategyMode(const StrategyMode mode) noexcept { strategyMode_ = mode; }

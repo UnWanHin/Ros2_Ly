@@ -2,8 +2,8 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, Shutdown
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, GroupAction, LogInfo, Shutdown
+from launch.conditions import IfCondition, LaunchConfigurationEquals, LaunchConfigurationNotEquals
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -21,6 +21,7 @@ def generate_launch_description():
     use_tracker = LaunchConfiguration("use_tracker")
     use_predictor = LaunchConfiguration("use_predictor")
     use_mapper = LaunchConfiguration("use_mapper")
+    offline = LaunchConfiguration("offline")
 
     mapper_red = LaunchConfiguration("mapper_red")
     mapper_target_id = LaunchConfiguration("mapper_target_id")
@@ -46,6 +47,11 @@ def generate_launch_description():
         DeclareLaunchArgument("use_tracker", default_value="true"),
         DeclareLaunchArgument("use_predictor", default_value="true"),
         DeclareLaunchArgument("use_mapper", default_value="false"),
+        DeclareLaunchArgument(
+            "offline",
+            default_value="false",
+            description="Offline profile: force virtual IO and video replay without editing YAML.",
+        ),
         DeclareLaunchArgument("mapper_red", default_value="true"),
         DeclareLaunchArgument("mapper_target_id", default_value="6"),
         DeclareLaunchArgument("mapper_enable_fire", default_value="true"),
@@ -66,28 +72,69 @@ def generate_launch_description():
     info_logs = [
         LogInfo(msg=["[auto_aim] config: ", config_file]),
         LogInfo(msg=["[auto_aim] output: ", output]),
+        LogInfo(msg=["[auto_aim] offline: ", offline]),
         LogInfo(msg=["[auto_aim] use_mapper: ", use_mapper]),
         LogInfo(msg=["[auto_aim] mapper angles -> ", mapper_angles_topic]),
         LogInfo(msg=["[auto_aim] mapper firecode -> ", mapper_firecode_topic]),
     ]
 
     nodes = [
-        Node(
-            package="gimbal_driver",
-            executable="gimbal_driver_node",
-            name="gimbal_driver",
-            output=output,
-            parameters=[config_file],
-            on_exit=Shutdown(reason="gimbal_driver exited"),
+        GroupAction(
+            actions=[
+                Node(
+                    package="gimbal_driver",
+                    executable="gimbal_driver_node",
+                    name="gimbal_driver",
+                    output=output,
+                    parameters=[config_file],
+                    on_exit=Shutdown(reason="gimbal_driver exited"),
+                    condition=LaunchConfigurationNotEquals("offline", "true"),
+                ),
+                Node(
+                    package="gimbal_driver",
+                    executable="gimbal_driver_node",
+                    name="gimbal_driver",
+                    output=output,
+                    parameters=[
+                        config_file,
+                        {
+                            "io_config/use_virtual_device": True,
+                            "io_config.use_virtual_device": True,
+                        },
+                    ],
+                    on_exit=Shutdown(reason="gimbal_driver exited"),
+                    condition=LaunchConfigurationEquals("offline", "true"),
+                ),
+            ],
             condition=IfCondition(use_gimbal),
         ),
-        Node(
-            package="detector",
-            executable="detector_node",
-            name="detector",
-            output=output,
-            parameters=[config_file],
-            on_exit=Shutdown(reason="detector exited"),
+        GroupAction(
+            actions=[
+                Node(
+                    package="detector",
+                    executable="detector_node",
+                    name="detector",
+                    output=output,
+                    parameters=[config_file],
+                    on_exit=Shutdown(reason="detector exited"),
+                    condition=LaunchConfigurationNotEquals("offline", "true"),
+                ),
+                Node(
+                    package="detector",
+                    executable="detector_node",
+                    name="detector",
+                    output=output,
+                    parameters=[
+                        config_file,
+                        {
+                            "detector_config/use_video": True,
+                            "detector_config.use_video": True,
+                        },
+                    ],
+                    on_exit=Shutdown(reason="detector exited"),
+                    condition=LaunchConfigurationEquals("offline", "true"),
+                ),
+            ],
             condition=IfCondition(use_detector),
         ),
         Node(

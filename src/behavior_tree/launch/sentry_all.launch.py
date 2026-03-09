@@ -2,8 +2,8 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, Shutdown
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, GroupAction, LogInfo, Shutdown
+from launch.conditions import IfCondition, LaunchConfigurationEquals, LaunchConfigurationNotEquals
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -23,6 +23,7 @@ def generate_launch_description():
     use_outpost = LaunchConfiguration("use_outpost")
     use_buff = LaunchConfiguration("use_buff")
     use_behavior_tree = LaunchConfiguration("use_behavior_tree")
+    offline = LaunchConfiguration("offline")
 
     launch_args = [
         DeclareLaunchArgument(
@@ -42,30 +43,76 @@ def generate_launch_description():
         DeclareLaunchArgument("use_outpost", default_value="true"),
         DeclareLaunchArgument("use_buff", default_value="true"),
         DeclareLaunchArgument("use_behavior_tree", default_value="true"),
+        DeclareLaunchArgument(
+            "offline",
+            default_value="false",
+            description="Offline profile: force virtual IO and video replay without editing YAML.",
+        ),
     ]
 
     info_logs = [
         LogInfo(msg=["[sentry_all] config: ", config_file]),
         LogInfo(msg=["[sentry_all] output: ", output]),
+        LogInfo(msg=["[sentry_all] offline: ", offline]),
     ]
 
     nodes = [
-        Node(
-            package="gimbal_driver",
-            executable="gimbal_driver_node",
-            name="gimbal_driver",
-            output=output,
-            parameters=[config_file],
-            on_exit=Shutdown(reason="gimbal_driver exited"),
+        GroupAction(
+            actions=[
+                Node(
+                    package="gimbal_driver",
+                    executable="gimbal_driver_node",
+                    name="gimbal_driver",
+                    output=output,
+                    parameters=[config_file],
+                    on_exit=Shutdown(reason="gimbal_driver exited"),
+                    condition=LaunchConfigurationNotEquals("offline", "true"),
+                ),
+                Node(
+                    package="gimbal_driver",
+                    executable="gimbal_driver_node",
+                    name="gimbal_driver",
+                    output=output,
+                    parameters=[
+                        config_file,
+                        {
+                            "io_config/use_virtual_device": True,
+                            "io_config.use_virtual_device": True,
+                        },
+                    ],
+                    on_exit=Shutdown(reason="gimbal_driver exited"),
+                    condition=LaunchConfigurationEquals("offline", "true"),
+                ),
+            ],
             condition=IfCondition(use_gimbal),
         ),
-        Node(
-            package="detector",
-            executable="detector_node",
-            name="detector",
-            output=output,
-            parameters=[config_file],
-            on_exit=Shutdown(reason="detector exited"),
+        GroupAction(
+            actions=[
+                Node(
+                    package="detector",
+                    executable="detector_node",
+                    name="detector",
+                    output=output,
+                    parameters=[config_file],
+                    on_exit=Shutdown(reason="detector exited"),
+                    condition=LaunchConfigurationNotEquals("offline", "true"),
+                ),
+                Node(
+                    package="detector",
+                    executable="detector_node",
+                    name="detector",
+                    output=output,
+                    parameters=[
+                        config_file,
+                        {
+                            "detector_config/use_video": True,
+                            "detector_config.use_video": True,
+                        },
+                    ],
+                    on_exit=Shutdown(reason="detector exited"),
+                    condition=LaunchConfigurationEquals("offline", "true"),
+                ),
+            ],
             condition=IfCondition(use_detector),
         ),
         Node(

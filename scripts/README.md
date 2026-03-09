@@ -52,6 +52,9 @@
 # 仅静态（文件、配置、BT XML）
 ./scripts/self_check_sentry.sh --static-only
 
+# 离线模式运行时链路（自动传 offline:=true）
+./scripts/self_check_sentry.sh --runtime-only --launch --offline --wait 12 --skip-hz
+
 # 仅运行时链路（你提到的命令）
 ./scripts/self_check_sentry.sh --runtime-only --launch --wait 12 --skip-hz
 
@@ -66,6 +69,9 @@
 
 ```bash
 ./scripts/start_sentry_all.sh
+
+# 离线模式（强制虚拟串口 + 视频回放参数覆盖）
+./scripts/start_sentry_all.sh --offline
 ```
 
 二次启动卡住时，优先用清理模式（默认已开启）：
@@ -88,6 +94,7 @@
 - `WARN > 0`：可继续，但需确认是否为当前场景预期（如未接网线）。
 - 若使用 `--launch` 且失败，脚本会自动输出 `Launch Diagnosis`，包含崩溃签名与最近日志尾部。
 - 运行前会提示当前配置是否要求“真实相机/真实串口”，避免离车时误用比赛参数。
+- 使用 `--offline` 时，会自动传 `offline:=true` 给 launch，避免每次手改 YAML。
 
 ## 比赛/调试开关位置
 

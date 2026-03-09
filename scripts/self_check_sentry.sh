@@ -9,6 +9,7 @@ mkdir -p "${ROS_LOG_DIR}"
 export ROS_LOG_DIR
 
 AUTO_LAUNCH=0
+OFFLINE_MODE=0
 WAIT_SECONDS=18
 CMD_TIMEOUT=6
 HZ_SECONDS=6
@@ -41,7 +42,7 @@ fi
 usage() {
   cat <<EOF
 Usage:
-  ${SCRIPT_NAME} [--launch] [--wait SECONDS] [--cmd-timeout SECONDS] [--hz-seconds SECONDS] [--skip-hz] [--static-only|--runtime-only] [-- <launch_args...>]
+  ${SCRIPT_NAME} [--launch] [--offline] [--wait SECONDS] [--cmd-timeout SECONDS] [--hz-seconds SECONDS] [--skip-hz] [--static-only|--runtime-only] [-- <launch_args...>]
 
 Examples:
   # 檢查當前已在運行的系統
@@ -61,6 +62,7 @@ Examples:
 
 Options:
   --launch               自動啟動 sentry_all.launch.py，檢查結束後自動停止
+  --offline              以離線模式啟動（傳遞 offline:=true）
   --wait SECONDS         啟動後等待秒數（默認: ${WAIT_SECONDS}）
   --cmd-timeout SECONDS  單次 ros2 命令超時（默認: ${CMD_TIMEOUT}）
   --hz-seconds SECONDS   ros2 topic hz 採樣時長（默認: ${HZ_SECONDS}）
@@ -153,6 +155,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --launch)
       AUTO_LAUNCH=1
+      shift
+      ;;
+    --offline)
+      OFFLINE_MODE=1
       shift
       ;;
     --wait)
@@ -332,6 +338,9 @@ check_launch_mode_hints() {
     return
   fi
   info "Launch mode hints based on config: ${yaml_file}"
+  if (( OFFLINE_MODE == 1 )); then
+    pass "Offline mode enabled: launch will enforce virtual IO + video replay overrides."
+  fi
 
   local use_video
   local use_virtual
@@ -643,9 +652,13 @@ if (( STATIC_ONLY == 0 && AUTO_LAUNCH == 1 )); then
   check_launch_mode_hints
   LAUNCH_LOG="$(mktemp /tmp/sentry_self_check.XXXXXX.log)"
   info "Launching stack by scripts/start_sentry_all.sh (log: ${LAUNCH_LOG})"
+  START_ARGS=(--cleanup-existing)
+  if (( OFFLINE_MODE == 1 )); then
+    START_ARGS+=(--offline)
+  fi
   (
     cd "${ROOT_DIR}"
-    ./scripts/start_sentry_all.sh --cleanup-existing "${LAUNCH_ARGS[@]}"
+    ./scripts/start_sentry_all.sh "${START_ARGS[@]}" "${LAUNCH_ARGS[@]}"
   ) >"${LAUNCH_LOG}" 2>&1 &
   LAUNCH_PID="$!"
   sleep "${WAIT_SECONDS}"

@@ -351,7 +351,12 @@ public:
 
     BT::NodeStatus tick() override {
         app_->PublishTogether();
-        app_->PrintMessageAll();
+        static auto last_print_time = std::chrono::steady_clock::time_point{};
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last_print_time > std::chrono::seconds(1)) {
+            app_->PrintMessageAll();
+            last_print_time = now;
+        }
         return BT::NodeStatus::SUCCESS;
     }
 };

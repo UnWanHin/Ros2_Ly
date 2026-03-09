@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_NAME="$(basename "$0")"
 CLEANUP_EXISTING=1
+OFFLINE_MODE=0
 LAUNCH_ARGS=()
 
 STACK_NODE_REGEX="/(gimbal_driver_node|detector_node|tracker_solver_node|predictor_node|outpost_hitter_node|buff_hitter_node|behavior_tree_node|mapper_node|fire_flip_test)([[:space:]]|$)"
@@ -16,11 +17,12 @@ export ROS_LOG_DIR
 usage() {
   cat <<EOF
 Usage:
-  ${SCRIPT_NAME} [--cleanup-existing|--no-cleanup-existing] [-- <launch_args...>]
+  ${SCRIPT_NAME} [--cleanup-existing|--no-cleanup-existing] [--offline] [-- <launch_args...>]
 
 Examples:
   ./${SCRIPT_NAME}
   ./${SCRIPT_NAME} --no-cleanup-existing
+  ./${SCRIPT_NAME} --offline
   ./${SCRIPT_NAME} -- use_buff:=false use_outpost:=false
 EOF
 }
@@ -33,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-cleanup-existing)
       CLEANUP_EXISTING=0
+      shift
+      ;;
+    --offline)
+      OFFLINE_MODE=1
       shift
       ;;
     --help|-h)
@@ -50,6 +56,24 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+has_launch_arg_key() {
+  local key="$1"
+  local arg
+  for arg in "${LAUNCH_ARGS[@]}"; do
+    if [[ "${arg}" == "${key}:="* ]] || [[ "${arg}" == "--${key}:="* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if (( OFFLINE_MODE == 1 )); then
+  if ! has_launch_arg_key "offline"; then
+    LAUNCH_ARGS=("offline:=true" "${LAUNCH_ARGS[@]}")
+  fi
+  echo "[INFO] Offline mode enabled: passing launch arg offline:=true" >&2
+fi
 
 source_ros() {
   if [[ -n "${ROS_DISTRO:-}" ]] && [[ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
