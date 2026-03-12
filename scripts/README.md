@@ -66,12 +66,18 @@
 
 用途：
 - 直接启动 `sentry_all.launch.py`，常用于手工调试或配合其他脚本。
+- 启动前可用 `1/2` 选择 `competition_profile`（`league/regional`）。
+- 脚本内强制使用实机参数 YAML：`scripts/config/auto_aim_config_competition.yaml`（会覆盖外部传入的 `config_file`）。
 
 ```bash
 ./scripts/start_sentry_all.sh
 
 # 离线模式（强制虚拟串口 + 视频回放参数覆盖）
 ./scripts/start_sentry_all.sh --offline
+
+# 非交互指定模式
+./scripts/start_sentry_all.sh --mode 1 --no-prompt     # league
+./scripts/start_sentry_all.sh --mode regional --no-prompt
 ```
 
 二次启动卡住时，优先用清理模式（默认已开启）：
@@ -88,24 +94,21 @@
 ./scripts/start_sentry_all.sh --no-cleanup-existing
 ```
 
-## 4.1 `start_sentry_all_competition.sh`（比赛版整链路启动）
+## 4.1 `start_sentry_all_competition.sh`（兼容入口）
 
 用途：
-- 默认使用比赛版参数文件：`scripts/config/auto_aim_config_competition.yaml`
-- 仍可透传 `start_sentry_all.sh` 的选项和 launch 参数
+- 兼容旧命令入口，内部仍会调用 `start_sentry_all.sh`。
+- 比赛模式选择、`competition_profile` 与实机 YAML 强制策略，统一由 `start_sentry_all.sh` 处理。
 
 常用命令：
 
 ```bash
-# 比赛版启动（无需手动传 config_file）
+# 比赛版启动（会进入 start_sentry_all 的模式选择）
 ./scripts/start_sentry_all_competition.sh
 
 # 仍可使用 offline 或其它 launch 参数
 ./scripts/start_sentry_all_competition.sh --offline
 ./scripts/start_sentry_all_competition.sh -- use_buff:=false use_outpost:=false
-
-# 如需指定其他配置，传 config_file 覆盖默认
-./scripts/start_sentry_all_competition.sh -- --config_file:=/abs/path/your_config.yaml
 ```
 
 ## 5. `start_autoaim_debug.sh`（auto_aim + mapper 联调）

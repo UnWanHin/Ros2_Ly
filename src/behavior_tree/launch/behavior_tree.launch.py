@@ -15,6 +15,9 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     output = LaunchConfiguration("output")
+    competition_profile = LaunchConfiguration("competition_profile")
+    bt_config_file = LaunchConfiguration("bt_config_file")
+    bt_tree_file = LaunchConfiguration("bt_tree_file")
 
     launch_args = [
         DeclareLaunchArgument(
@@ -22,10 +25,28 @@ def generate_launch_description():
             default_value="screen",
             description="ROS node output mode: screen or log.",
         ),
+        DeclareLaunchArgument(
+            "competition_profile",
+            default_value="",
+            description="behavior_tree profile override: regional or league. Empty keeps config/default.",
+        ),
+        DeclareLaunchArgument(
+            "bt_config_file",
+            default_value="",
+            description="Optional behavior_tree JSON config path. Relative paths resolve under behavior_tree share dir.",
+        ),
+        DeclareLaunchArgument(
+            "bt_tree_file",
+            default_value="",
+            description="Optional behavior_tree XML path. Relative paths resolve under behavior_tree share dir.",
+        ),
     ]
 
     info_logs = [
         LogInfo(msg=["[behavior_tree] output: ", output]),
+        LogInfo(msg=["[behavior_tree] competition_profile: ", competition_profile]),
+        LogInfo(msg=["[behavior_tree] bt_config_file: ", bt_config_file]),
+        LogInfo(msg=["[behavior_tree] bt_tree_file: ", bt_tree_file]),
     ]
 
     nodes = [
@@ -34,6 +55,13 @@ def generate_launch_description():
             executable="behavior_tree_node",
             name="behavior_tree",
             output=output,
+            parameters=[
+                {
+                    "competition_profile": competition_profile,
+                    "bt_config_file": bt_config_file,
+                    "bt_tree_file": bt_tree_file,
+                }
+            ],
             on_exit=Shutdown(reason="behavior_tree exited"),
         )
     ]

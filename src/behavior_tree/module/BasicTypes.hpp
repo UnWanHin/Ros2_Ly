@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <array>
 #include <numbers>
+#include <string>
 #include <vector>
 
 #pragma region Enums
@@ -269,6 +270,7 @@ namespace LangYa
     static constexpr TeamedLocation BuffAround2{ 15 };
     static constexpr TeamedLocation RightShoot{ 16 };
     static constexpr TeamedLocation HoleRoad{ 17 };
+    static constexpr TeamedLocation OccupyArea{ 18 };
 
     /// @brief 团队类型
     enum class NaviTeam : std::uint8_t
@@ -358,29 +360,39 @@ namespace LangYa
 
     // 辅瞄调试
     struct AimDebug {
-        bool StopFire;
-        bool StopRotate;
-        bool StopScan;
-        bool HitOutpost;
-        bool HitBuff;
-        bool HitCar;
+        bool StopFire{false};
+        bool StopRotate{false};
+        bool StopScan{false};
+        bool HitOutpost{false};
+        bool HitBuff{false};
+        bool HitCar{false};
     };
 
     // 频率相关
     struct Rate {
-        int FireRate;
-        int TreeTickRate;
-        int NaviCommandRate;
+        int FireRate{20};
+        int TreeTickRate{100};
+        int NaviCommandRate{1};
     };
     struct GameStrategy {
         bool HitOutpost{false}; // 是否击打前哨站
         int HitBuff{false};  // 击打前哨站时
         bool TestNavi{false}; // 是否测试导航
         bool HitSentry{false}; // 攻击哨兵
-        bool Protected; // 保守模式
+        bool Protected{false}; // 保守模式
     };
     struct NaviSetting {
-        bool UseXY;
+        bool UseXY{true};
+    };
+
+    struct LeagueStrategySetting {
+        bool UseHealthRecovery{true};
+        std::uint16_t HealthRecoveryThreshold{100};
+        bool UseAmmoRecovery{true};
+        std::uint16_t AmmoRecoveryThreshold{30};
+        std::uint8_t MainGoal{OccupyArea.ID};
+        std::vector<std::uint8_t> PatrolGoals{};
+        int GoalHoldSec{15};
     };
 
     // 姿态模块配置
@@ -404,12 +416,14 @@ namespace LangYa
 
     // Main
     struct Config {
-        AimDebug AimDebugSettings;
-        Rate RateSettings;
-        GameStrategy GameStrategySettings;
-        NaviSetting NaviSettings;
-        PostureSetting PostureSettings;
-        int ScanCounter;  /// 扫描模式计数器，一定值后Yaw动一次
+        AimDebug AimDebugSettings{};
+        Rate RateSettings{};
+        GameStrategy GameStrategySettings{};
+        NaviSetting NaviSettings{};
+        LeagueStrategySetting LeagueStrategySettings{};
+        PostureSetting PostureSettings{};
+        int ScanCounter{1};  /// 扫描模式计数器，一定值后Yaw动一次
+        std::string CompetitionProfile{"regional"};
     };
 
 #pragma endregion Configuration

@@ -20,7 +20,10 @@ behavior_tree/
 ├── main.cpp                    # 入口，創建 Application 並 Run()
 ├── Scripts/
 │   ├── main.xml                # BT v4 行為樹主文件
-│   └── config.json             # 策略配置文件
+│   ├── config.json             # 默認/兼容策略配置文件
+│   └── ConfigJson/             # 可切換比賽 profile 配置
+│       ├── regional_competition.json
+│       └── league_competition.json
 ├── include/
 │   ├── Application.hpp         # 核心類：所有狀態變量 + 所有函數聲明
 │   ├── Node.hpp                # BT節點定義（BT v4 動作節點/條件節點等）
@@ -116,9 +119,10 @@ rclcpp::shutdown();
 ```
 Application::Application()
 ├── rclcpp::init（如果還沒init）
-├── create_node("behavior_tree")，allow_undeclared_parameters
+├── create_node("behavior_tree")，允許從 launch 注入參數覆蓋
 ├── InitLogger()              → 初始化日誌（Logger子系統）
 ├── 從 ament_index 獲取包路徑 → 定位 Scripts/main.xml 和 config.json
+├── 可選讀取 `competition_profile` / `bt_config_file` / `bt_tree_file`
 ├── SubscribeMessageAll()     → 訂閱全部上游 Topics
 ├── PublishMessageAll()       → 創建全部發布者
 ├── ConfigurationInit()       → 讀取 config.json
@@ -242,6 +246,37 @@ void TreeTick() {
 | `/ly/navi/goal` | 導航目標點位 |
 | `/ly/navi/goal_pos` | 導航目標座標 |
 | `/ly/navi/speed_level` | 底盤速度等級 |
+
+### 比賽 Profile 切換
+
+- `competition_profile:=league`
+  - 使用聯盟賽簡化決策 profile
+  - 若未顯式指定 `bt_config_file`，默認讀 `Scripts/ConfigJson/league_competition.json`
+  - 建議搭配 `NaviSetting.UseXY=false`，只發 `/ly/navi/goal`
+  - 聯盟賽會進入顯式策略 `LeagueSimple`，不再借用 `HitHero`
+- `competition_profile:=regional`
+  - 保持分區賽/原有複雜策略
+  - 若未顯式指定 `bt_config_file`，默認回退到 `Scripts/config.json`
+- `bt_config_file:=Scripts/ConfigJson/regional_competition.json`
+  - 顯式指定某份 BT JSON 配置
+
+### 聯盟賽決策（當前實作）
+
+聯盟賽現在是單獨的一條簡化策略分支：
+
+- 策略名：`LeagueSimple`
+- 導航輸出：優先用 `/ly/navi/goal`
+- 默認目標 ID：`OccupyArea = 18`
+- 決策規則只有兩段：
+  - 血量低 / 彈藥低：切 `Recovery`
+  - 否則：切 `OccupyArea`
+
+補充：
+
+- `OccupyArea` 在 BT 只是目標序號，具體區域隨機點位應由導航側解釋。
+- `Area::OccupyArea` 只保留兼容坐標，占位給舊的 `goal_pos` 鏈路，不建議聯盟賽依賴它。
+- `bt_tree_file:=Scripts/main.xml`
+  - 顯式指定 BT XML 文件
 
 ---
 

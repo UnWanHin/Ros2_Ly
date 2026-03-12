@@ -1,5 +1,7 @@
 #include "../include/Application.hpp"
 
+#include <algorithm>
+
 using namespace LangYa;
 
 namespace BehaviorTree {
@@ -11,6 +13,14 @@ namespace BehaviorTree {
             normalized += 360.0f;
         return normalized;
     }
+
+    namespace {
+    constexpr std::uint8_t kMaxBaseGoalId = LangYa::OccupyArea.ID;
+
+    bool IsValidBaseGoalId(const std::uint8_t goal_id) {
+        return goal_id <= kMaxBaseGoalId;
+    }
+    }  // namespace
 
      /**
      * @brief 更新黑板数据 \n
@@ -513,16 +523,146 @@ namespace BehaviorTree {
 
 namespace BehaviorTree {
 
+    std::uint8_t Application::ResolveGoalId(const std::uint8_t base_goal_id, const UnitTeam team) const noexcept {
+        return team == UnitTeam::Blue
+            ? static_cast<std::uint8_t>(base_goal_id + LangYa::TeamedLocation::LocationCount)
+            : base_goal_id;
+    }
+
+    void Application::SetPositionByBaseGoal(const std::uint8_t base_goal_id, const UnitTeam goal_team) {
+        switch (base_goal_id) {
+            case LangYa::Home.ID: SET_POSITION(Home, goal_team); break;
+            case LangYa::Base.ID: SET_POSITION(Base, goal_team); break;
+            case LangYa::Recovery.ID: SET_POSITION(Recovery, goal_team); break;
+            case LangYa::BuffShoot.ID: SET_POSITION(BuffShoot, goal_team); break;
+            case LangYa::LeftHighLand.ID: SET_POSITION(LeftHighLand, goal_team); break;
+            case LangYa::CastleLeft.ID: SET_POSITION(CastleLeft, goal_team); break;
+            case LangYa::Castle.ID: SET_POSITION(Castle, goal_team); break;
+            case LangYa::CastleRight1.ID: SET_POSITION(CastleRight1, goal_team); break;
+            case LangYa::CastleRight2.ID: SET_POSITION(CastleRight2, goal_team); break;
+            case LangYa::FlyRoad.ID: SET_POSITION(FlyRoad, goal_team); break;
+            case LangYa::OutpostArea.ID: SET_POSITION(OutpostArea, goal_team); break;
+            case LangYa::MidShoot.ID: SET_POSITION(MidShoot, goal_team); break;
+            case LangYa::LeftShoot.ID: SET_POSITION(LeftShoot, goal_team); break;
+            case LangYa::OutpostShoot.ID: SET_POSITION(OutpostShoot, goal_team); break;
+            case LangYa::BuffAround1.ID: SET_POSITION(BuffAround1, goal_team); break;
+            case LangYa::BuffAround2.ID: SET_POSITION(BuffAround2, goal_team); break;
+            case LangYa::RightShoot.ID: SET_POSITION(RightShoot, goal_team); break;
+            case LangYa::HoleRoad.ID: SET_POSITION(HoleRoad, goal_team); break;
+            case LangYa::OccupyArea.ID: SET_POSITION(OccupyArea, goal_team); break;
+            default:
+                LoggerPtr->Warning("Unknown base goal id={}, fallback to Home.", static_cast<int>(base_goal_id));
+                SET_POSITION(Home, goal_team);
+                break;
+        }
+    }
+
     void Application::SetPositionRepeat() {
-        if(config.GameStrategySettings.HitSentry) SetPositionHitSentry();
+        if(IsLeagueProfile()) SetPositionLeagueSimple();
+        else if(config.GameStrategySettings.HitSentry) SetPositionHitSentry();
         else if(config.GameStrategySettings.TestNavi) SetPositionNaviTest();
         else if(config.GameStrategySettings.Protected) SetPositionProtect();
         else SetPositionHitHero();
     }
 
+    void Application::SetPositionLeagueSimple() {
+        const auto& league = config.LeagueStrategySettings;
+        const int hold_sec = std::max(1, league.GoalHoldSec);
+
+        if (CheckPositionRecovery()) {
+            LoggerPtr->Info("League profile recovery: health={} ammo={}", myselfHealth, ammoLeft);
+            leaguePatrolGoalIndex_ = 0;
+            leaguePatrolGoalInitialized_ = false;
+            return;
+        }
+
+        std::vector<std::uint8_t> plan;
+        plan.reserve(1 + league.PatrolGoals.size());
+        auto append_goal = [&](const std::uint8_t goal_id) {
+            if (!IsValidBaseGoalId(goal_id)) {
+                LoggerPtr->Warning("Skip invalid league goal id={}.", static_cast<int>(goal_id));
+                return;
+            }
+            if (std::find(plan.begin(), plan.end(), goal_id) == plan.end()) {
+                plan.push_back(goal_id);
+            }
+        };
+        append_goal(league.MainGoal);
+        for (const auto goal_id : league.PatrolGoals) {
+            append_goal(goal_id);
+        }
+        if (plan.empty()) {
+            append_goal(LangYa::OccupyArea.ID);
+        }
+
+        if (!leaguePatrolGoalInitialized_) {
+            leaguePatrolGoalIndex_ = 0;
+            SetPositionByBaseGoal(plan[leaguePatrolGoalIndex_], team);
+            naviCommandIntervalClock.reset(Seconds{hold_sec});
+            speedLevel = 1;
+            leaguePatrolGoalInitialized_ = true;
+            LoggerPtr->Info("League profile init goal={}", static_cast<int>(naviCommandGoal));
+            return;
+        }
+
+        const auto current_it = std::find_if(plan.begin(), plan.end(),
+            [this](const std::uint8_t goal_id) {
+                return naviCommandGoal == ResolveGoalId(goal_id, team);
+            });
+        if (current_it == plan.end()) {
+            leaguePatrolGoalIndex_ = 0;
+            SetPositionByBaseGoal(plan[leaguePatrolGoalIndex_], team);
+            naviCommandIntervalClock.reset(Seconds{hold_sec});
+            speedLevel = 1;
+            LoggerPtr->Info("League profile reset goal={}", static_cast<int>(naviCommandGoal));
+            return;
+        }
+        leaguePatrolGoalIndex_ = static_cast<std::size_t>(std::distance(plan.begin(), current_it));
+
+        if (plan.size() == 1U) {
+            speedLevel = 1;
+            return;
+        }
+
+        if (!naviCommandIntervalClock.trigger()) {
+            speedLevel = 1;
+            return;
+        }
+
+        if (plan.size() > 1U) {
+            leaguePatrolGoalIndex_ = (leaguePatrolGoalIndex_ + 1U) % plan.size();
+        }
+        SetPositionByBaseGoal(plan[leaguePatrolGoalIndex_], team);
+        naviCommandIntervalClock.reset(Seconds{hold_sec});
+        speedLevel = 1;
+        LoggerPtr->Info("League profile switch goal={}", static_cast<int>(naviCommandGoal));
+    }
+
     bool Application::CheckPositionRecovery() {
         UnitTeam MyTeam = team, EnemyTeam = team == UnitTeam::Blue ? UnitTeam::Red : UnitTeam::Blue;
         int now_time = 420 - timeLeft;
+        if (IsLeagueProfile()) {
+            const auto& league = config.LeagueStrategySettings;
+            const bool health_low = league.UseHealthRecovery &&
+                myselfHealth < league.HealthRecoveryThreshold;
+            const bool ammo_low = league.UseAmmoRecovery &&
+                ammoLeft <= league.AmmoRecoveryThreshold;
+
+            if (naviCommandGoal == Recovery(MyTeam) && (health_low || ammo_low)) {
+                naviCommandIntervalClock.reset(Seconds{1});
+                return true;
+            }
+
+            if (health_low || (ammo_low && recoveryClock.trigger())) {
+                SET_POSITION(Recovery, MyTeam);
+                if (ammo_low) {
+                    recoveryClock.tick();
+                }
+                naviCommandIntervalClock.reset(Seconds{1});
+                return true;
+            }
+            return false;
+        }
         // 复活
         if(naviCommandGoal == Recovery(MyTeam)) {
             if(myselfHealth < 380) {
@@ -708,6 +848,11 @@ namespace BehaviorTree {
     }
 
     void Application::SetPositionHitHero() {
+        if (IsLeagueProfile()) {
+            SetPositionLeagueSimple();
+            return;
+        }
+
         UnitTeam MyTeam = team, EnemyTeam = team == UnitTeam::Blue ? UnitTeam::Red : UnitTeam::Blue;
         // int now_time = 420 - timeLeft;
         int now_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - gameStartTime).count();

@@ -1,6 +1,8 @@
 #include "../include/Application.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <cctype>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include "Node.hpp"
@@ -9,6 +11,46 @@ using namespace LangYa;
 using namespace BehaviorTree;
 
 namespace BehaviorTree {
+
+namespace {
+
+std::string NormalizeProfile(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+std::string ReadStringParameter(rclcpp::Node& node, const std::string& name, const std::string& default_value) {
+    if (!node.has_parameter(name)) {
+        node.declare_parameter(name, default_value);
+    }
+    std::string value = default_value;
+    (void)node.get_parameter(name, value);
+    return value;
+}
+
+std::string ResolveBehaviorTreePath(const std::string& pkg_path, const std::string& configured_path) {
+    if (configured_path.empty()) {
+        return {};
+    }
+
+    const std::filesystem::path path(configured_path);
+    if (path.is_absolute()) {
+        return path.lexically_normal().string();
+    }
+
+    return (std::filesystem::path(pkg_path) / path).lexically_normal().string();
+}
+
+std::string DefaultConfigPathForProfile(const std::string& pkg_path, const std::string& profile_override) {
+    const auto normalized = NormalizeProfile(profile_override);
+    if (normalized == "league") {
+        return (std::filesystem::path(pkg_path) / "Scripts/ConfigJson/league_competition.json").string();
+    }
+    return (std::filesystem::path(pkg_path) / "Scripts/config.json").string();
+}
+
+}  // namespace
 
 #ifndef BT_DIAG_CONSOLE
 #define BT_DIAG_CONSOLE 0
@@ -31,7 +73,10 @@ namespace BehaviorTree {
 
         // 2. [ROS 2] 創建節點實例
         // [DIAG] 极简 Node 构造，排除 NodeOptions 影响
-        node_ = std::make_shared<rclcpp::Node>(nodeName);
+        rclcpp::NodeOptions node_options;
+        node_options.allow_undeclared_parameters(true);
+        node_options.automatically_declare_parameters_from_overrides(true);
+        node_ = std::make_shared<rclcpp::Node>(nodeName, node_options);
         BT_DIAG_LOG("[BT_DIAG] node created\n");
 
         // 3. 初始化日誌 (Logger)
@@ -48,11 +93,27 @@ namespace BehaviorTree {
         // 4. [ROS 2] 動態獲取 Config 和 XML 路徑
         try {
             std::string pkg_path = ament_index_cpp::get_package_share_directory("behavior_tree");
-            behavior_tree_file_ = pkg_path + "/Scripts/main.xml";
-            config_file_       = pkg_path + "/Scripts/config.json";
+            competitionProfileOverride_ = ReadStringParameter(*node_, "competition_profile", "");
+            const std::string tree_override = ReadStringParameter(*node_, "bt_tree_file", "");
+            const std::string config_override = ReadStringParameter(*node_, "bt_config_file", "");
+
+            const std::string default_tree_file = pkg_path + "/Scripts/main.xml";
+            const std::string default_config_file = DefaultConfigPathForProfile(pkg_path, competitionProfileOverride_);
+
+            behavior_tree_file_ = tree_override.empty()
+                ? default_tree_file
+                : ResolveBehaviorTreePath(pkg_path, tree_override);
+            config_file_ = config_override.empty()
+                ? default_config_file
+                : ResolveBehaviorTreePath(pkg_path, config_override);
             
             LoggerPtr->Info("Loading BT from: {}", behavior_tree_file_);
             LoggerPtr->Info("Loading Config from: {}", config_file_);
+            if (competitionProfileOverride_.empty()) {
+                LoggerPtr->Info("Competition profile override: <config/default>");
+            } else {
+                LoggerPtr->Info("Competition profile override: {}", competitionProfileOverride_);
+            }
         } catch (const std::exception& e) {
             RCLCPP_ERROR(node_->get_logger(), "Error: Could not find package 'behavior_tree'.");
             throw e;

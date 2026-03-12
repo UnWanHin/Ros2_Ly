@@ -75,6 +75,13 @@ public:
         if (!global_board) {
             return BT::NodeStatus::FAILURE;
         }
+
+        if (app_->GetCompetitionProfile() == CompetitionProfile::League) {
+            app_->SetStrategyMode(StrategyMode::LeagueSimple);
+            global_board->set("StrategyMode", static_cast<std::uint8_t>(StrategyMode::LeagueSimple));
+            return BT::NodeStatus::SUCCESS;
+        }
+
         const int now_time = app_->ElapsedSeconds();
 
         std::uint16_t self_outpost_health = 0;
@@ -199,6 +206,18 @@ public:
     }
 };
 
+class IsStrategyLeagueSimpleNode : public AppConditionNode {
+public:
+    IsStrategyLeagueSimpleNode(const std::string& name, const BT::NodeConfig& config, Application* app)
+        : AppConditionNode(name, config, app) {}
+
+    static BT::PortsList providedPorts() { return {}; }
+
+    BT::NodeStatus tick() override {
+        return app_->GetStrategyMode() == StrategyMode::LeagueSimple ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    }
+};
+
 class ExecuteHitSentryStrategyNode : public AppSyncActionNode {
 public:
     ExecuteHitSentryStrategyNode(const std::string& name, const BT::NodeConfig& config, Application* app)
@@ -247,6 +266,19 @@ public:
 
     BT::NodeStatus tick() override {
         app_->SetPositionNaviTest();
+        return BT::NodeStatus::SUCCESS;
+    }
+};
+
+class ExecuteLeagueSimpleStrategyNode : public AppSyncActionNode {
+public:
+    ExecuteLeagueSimpleStrategyNode(const std::string& name, const BT::NodeConfig& config, Application* app)
+        : AppSyncActionNode(name, config, app) {}
+
+    static BT::PortsList providedPorts() { return {}; }
+
+    BT::NodeStatus tick() override {
+        app_->SetPositionLeagueSimple();
         return BT::NodeStatus::SUCCESS;
     }
 };

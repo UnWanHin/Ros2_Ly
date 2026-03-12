@@ -18,6 +18,7 @@
       <CheckNeedRecovery/>
       <SubTree ID="HitSentryStrategy"/>
       <SubTree ID="HitHeroStrategy"/>
+      <SubTree ID="LeagueSimpleStrategy"/>
       <SubTree ID="ProtectedStrategy"/>
       <SubTree ID="NaviTestStrategy"/>
     </Fallback>
@@ -44,6 +45,13 @@
     </Sequence>
   </BehaviorTree>
 
+  <BehaviorTree ID="LeagueSimpleStrategy">
+    <Sequence name="LeagueSimpleSequence">
+      <IsStrategyLeagueSimple/>
+      <ExecuteLeagueSimpleStrategy/>
+    </Sequence>
+  </BehaviorTree>
+
   <BehaviorTree ID="NaviTestStrategy">
     <Sequence name="NaviTestSequence">
       <IsStrategyNaviTest/>
@@ -59,6 +67,7 @@
     <Action ID="ExecuteHitHeroStrategy"/>
     <Action ID="ExecuteProtectedStrategy"/>
     <Action ID="ExecuteNaviTestStrategy"/>
+    <Action ID="ExecuteLeagueSimpleStrategy"/>
     <Action ID="PreprocessData"/>
     <Action ID="SelectAimTarget"/>
     <Action ID="SelectPosture"/>
@@ -69,5 +78,6 @@
     <Condition ID="IsStrategyHitHero"/>
     <Condition ID="IsStrategyProtected"/>
     <Condition ID="IsStrategyNaviTest"/>
+    <Condition ID="IsStrategyLeagueSimple"/>
   </TreeNodesModel>
 </root>

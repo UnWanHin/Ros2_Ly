@@ -33,15 +33,17 @@
 4. `SubTree: StrategyDispatch`
 5. `PreprocessData`
 6. `SelectAimTarget`
-7. `PublishAll`
+7. `SelectPosture`
+8. `PublishAll`
 
 對應關係：
 - `UpdateGlobalData`：重置 Tick 黑板 + 把 Application 狀態寫入 Global 黑板
 - `SelectAimMode`：沿用原 `SetAimMode()` + `CheckDebug()`
 - `SelectStrategyMode`：根據比賽狀態做策略模式動態切換
-- `StrategyDispatch`：四個策略子樹分開執行（HitSentry / HitHero / Protected / NaviTest）
+- `StrategyDispatch`：五個策略子樹分開執行（HitSentry / HitHero / LeagueSimple / Protected / NaviTest）
 - `PreprocessData`：沿用 `ProcessData()`
 - `SelectAimTarget`：沿用 `SetAimTarget()`
+- `SelectPosture`：根據策略/目標/資源狀態選姿態
 - `PublishAll`：沿用 `PublishTogether()` + `PrintMessageAll()`
 
 ### 2.2 策略子樹與動態切換
@@ -49,6 +51,7 @@
 策略切換節點：`SelectStrategyModeNode`（`src/behavior_tree/include/BTNodes.hpp`）
 
 核心規則（不改原業務意圖）：
+- 若 `competition_profile=league`：直接切 `LeagueSimple`
 - 開局前 10 秒：保持 `config.json` 初始策略
 - 低資源條件：切 `Protected`
   - `SelfHealth < 100` 或 `TimeLeft <= 120` 或剩餘能量低
@@ -60,10 +63,25 @@
 策略子樹執行時，最終仍調用既有函數：
 - `ExecuteHitSentryStrategy` -> `SetPositionHitSentry()`
 - `ExecuteHitHeroStrategy` -> `SetPositionHitHero()`
+- `ExecuteLeagueSimpleStrategy` -> `SetPositionLeagueSimple()`
 - `ExecuteProtectedStrategy` -> `SetPositionProtect()`
 - `ExecuteNaviTestStrategy` -> `SetPositionNaviTest()`
 
-### 2.3 當前「調試模式」邊界（重要）
+### 2.3 聯盟賽現在怎麼決策
+
+聯盟賽現在不是把原本分區賽邏輯「砍半」後硬套，而是單獨走 `LeagueSimple`：
+
+- 缺省導航模式：`NaviSetting.UseXY=false`
+- BT 只發目標序號：`/ly/navi/goal`
+- 當前占點序號：`OccupyArea = 18`
+- 規則：
+  - `myselfHealth < HealthRecoveryThreshold` 時回 `Recovery`
+  - `ammoLeft <= AmmoRecoveryThreshold` 時也可回 `Recovery`
+  - 其他時間固定去 `OccupyArea`
+
+`PatrolGoals` 仍保留在配置裡，之後如果你想把聯盟賽擴成「多個占點/巡邏點輪換」，只要往裡加序號即可；目前默認是空，等於只跑一個占點。
+
+### 2.4 當前「調試模式」邊界（重要）
 
 - `behavior_tree` 啟動後，會先 `WaitBeforeGame()`，再在 `WaitForGameStart()` 等待 `/ly/game/is_start=true`。
 - `Application::CheckDebug()` 只覆蓋 `AimMode`（例如強制 Buff / Outpost），不會跳過開賽等待。
@@ -88,6 +106,7 @@
 - `SetPositionNaviTest()`
 - `SetPositionHitSentry()`
 - `SetPositionHitHero()`
+- `SetPositionLeagueSimple()`
 - `CheckPositionRecovery()`
 
 BT 節點實際調用的就是這些函數。
@@ -157,11 +176,21 @@ BT 節點實際調用的就是這些函數。
 
 `behavior_tree` 的策略初值與調試開關在：
 - `src/behavior_tree/Scripts/config.json`
+- `src/behavior_tree/Scripts/ConfigJson/regional_competition.json`
+- `src/behavior_tree/Scripts/ConfigJson/league_competition.json`
 
 常改項：
 - `GameStrategy.HitSentry / TestNavi / Protected / HitBuff / HitOutpost`（初始策略）
 - `AimDebug.StopFire / StopRotate / StopScan / HitBuff / HitOutpost`
 - `Rate.FireRate / TreeTickRate / NaviCommandRate`
+- `CompetitionProfile`
+- `LeagueStrategy.UseHealthRecovery / HealthRecoveryThreshold / UseAmmoRecovery / AmmoRecoveryThreshold / MainGoal / PatrolGoals / GoalHoldSec`
+
+當前聯盟賽推薦值：
+- `CompetitionProfile = "league"`
+- `NaviSetting.UseXY = false`
+- `LeagueStrategy.MainGoal = 18`（`OccupyArea`）
+- `LeagueStrategy.PatrolGoals = []`
 
 ---
 
@@ -271,4 +300,16 @@ ros2 launch behavior_tree sentry_all.launch.py use_buff:=false use_outpost:=fals
 ```bash
 ros2 launch behavior_tree sentry_all.launch.py \
   config_file:=/home/unwanhin/ros2_ly_ws_sentary/src/detector/config/auto_aim_config.yaml
+```
+
+4. 切到聯盟賽 profile
+```bash
+ros2 launch behavior_tree sentry_all.launch.py \
+  competition_profile:=league
+```
+
+5. 顯式指定 BT 比賽配置
+```bash
+ros2 launch behavior_tree sentry_all.launch.py \
+  bt_config_file:=Scripts/ConfigJson/league_competition.json
 ```

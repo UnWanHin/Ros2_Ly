@@ -55,7 +55,8 @@ enum class StrategyMode : std::uint8_t {
     HitSentry = 0,
     HitHero = 1,
     Protected = 2,
-    NaviTest = 3
+    NaviTest = 3,
+    LeagueSimple = 4
 };
 
 inline const char* StrategyModeToString(const StrategyMode mode) {
@@ -64,7 +65,21 @@ inline const char* StrategyModeToString(const StrategyMode mode) {
         case StrategyMode::HitHero: return "HitHero";
         case StrategyMode::Protected: return "Protected";
         case StrategyMode::NaviTest: return "NaviTest";
+        case StrategyMode::LeagueSimple: return "LeagueSimple";
         default: return "Unknown";
+    }
+}
+
+enum class CompetitionProfile : std::uint8_t {
+    Regional = 0,
+    League = 1
+};
+
+inline const char* CompetitionProfileToString(const CompetitionProfile profile) {
+    switch (profile) {
+        case CompetitionProfile::Regional: return "regional";
+        case CompetitionProfile::League: return "league";
+        default: return "regional";
     }
 }
 
@@ -150,6 +165,10 @@ private:
     TimerClock naviCommandIntervalClock{Seconds{10}}, recoveryClock{Seconds{90}}; // 控制间隔，回家时间 
     std::uint8_t speedLevel{1}; // 0 没电, 1 正常, 2 快速
     StrategyMode strategyMode_{StrategyMode::HitHero}; // 当前策略
+    CompetitionProfile competitionProfile_{CompetitionProfile::Regional};
+    std::string competitionProfileOverride_{};
+    std::size_t leaguePatrolGoalIndex_{0};
+    bool leaguePatrolGoalInitialized_{false};
 
     // ==========================================
     // Runtime Guard (L1/L2)
@@ -301,6 +320,9 @@ public:
     void SetPositionNaviTest();
     void SetPositionHitSentry();
     void SetPositionHitHero();
+    void SetPositionLeagueSimple();
+    void SetPositionByBaseGoal(std::uint8_t base_goal_id, UnitTeam team);
+    std::uint8_t ResolveGoalId(std::uint8_t base_goal_id, UnitTeam team) const noexcept;
     void SetAimTarget();
     void SetAimTargetNormal();
     void SetAimMode();
@@ -338,6 +360,9 @@ public:
 
     StrategyMode GetStrategyMode() const noexcept { return strategyMode_; }
     void SetStrategyMode(const StrategyMode mode) noexcept { strategyMode_ = mode; }
+    CompetitionProfile GetCompetitionProfile() const noexcept { return competitionProfile_; }
+    void SetCompetitionProfile(const CompetitionProfile profile) noexcept { competitionProfile_ = profile; }
+    bool IsLeagueProfile() const noexcept { return competitionProfile_ == CompetitionProfile::League; }
     AimMode GetAimMode() const noexcept { return aimMode; }
     BT::Blackboard::Ptr GetGlobalBlackboard() const noexcept { return GlobalBlackboard_; }
     BT::Blackboard::Ptr GetTickBlackboard() const noexcept { return TickBlackboard_; }

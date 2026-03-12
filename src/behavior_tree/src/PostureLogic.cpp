@@ -67,6 +67,10 @@ SentryPosture Application::SelectDesiredPosture(const bool has_target) const {
             score.Attack += 2;
             score.Move += 1;
             break;
+        case StrategyMode::LeagueSimple:
+            score.Attack += 1;
+            score.Move += 3;
+            break;
     }
 
     // 2) 瞄准模式加权

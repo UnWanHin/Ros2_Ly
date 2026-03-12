@@ -26,6 +26,9 @@ def generate_launch_description():
 
     config_file = LaunchConfiguration("config_file")
     output = LaunchConfiguration("output")
+    competition_profile = LaunchConfiguration("competition_profile")
+    bt_config_file = LaunchConfiguration("bt_config_file")
+    bt_tree_file = LaunchConfiguration("bt_tree_file")
 
     use_gimbal = LaunchConfiguration("use_gimbal")
     use_detector = LaunchConfiguration("use_detector")
@@ -47,6 +50,21 @@ def generate_launch_description():
             default_value="screen",
             description="ROS node output mode: screen or log.",
         ),
+        DeclareLaunchArgument(
+            "competition_profile",
+            default_value="",
+            description="behavior_tree profile override: regional or league. Empty keeps config/default.",
+        ),
+        DeclareLaunchArgument(
+            "bt_config_file",
+            default_value="",
+            description="Optional behavior_tree JSON config path. Relative paths resolve under behavior_tree share dir.",
+        ),
+        DeclareLaunchArgument(
+            "bt_tree_file",
+            default_value="",
+            description="Optional behavior_tree XML path. Relative paths resolve under behavior_tree share dir.",
+        ),
         DeclareLaunchArgument("use_gimbal", default_value="true"),
         DeclareLaunchArgument("use_detector", default_value="true"),
         DeclareLaunchArgument("use_tracker", default_value="true"),
@@ -65,6 +83,9 @@ def generate_launch_description():
         LogInfo(msg=["[sentry_all] config: ", config_file]),
         LogInfo(msg=["[sentry_all] output: ", output]),
         LogInfo(msg=["[sentry_all] offline: ", offline]),
+        LogInfo(msg=["[sentry_all] competition_profile: ", competition_profile]),
+        LogInfo(msg=["[sentry_all] bt_config_file: ", bt_config_file]),
+        LogInfo(msg=["[sentry_all] bt_tree_file: ", bt_tree_file]),
     ]
 
     nodes = [
@@ -171,6 +192,13 @@ def generate_launch_description():
             executable="behavior_tree_node",
             name="behavior_tree",
             output=output,
+            parameters=[
+                {
+                    "competition_profile": competition_profile,
+                    "bt_config_file": bt_config_file,
+                    "bt_tree_file": bt_tree_file,
+                }
+            ],
             on_exit=Shutdown(reason="behavior_tree exited"),
             condition=IfCondition(use_behavior_tree),
         ),
