@@ -185,6 +185,7 @@ namespace LangYa {
         sp.GoalHoldSec = j.value("GoalHoldSec", sp.GoalHoldSec);
         sp.Random = j.value("Random", sp.Random);
         sp.DisableTeamOffset = j.value("DisableTeamOffset", sp.DisableTeamOffset);
+        sp.IgnoreRecovery = j.value("IgnoreRecovery", sp.IgnoreRecovery);
         if (j.contains("Goals")) {
             j.at("Goals").get_to(sp.Goals);
         }
@@ -304,6 +305,7 @@ namespace BehaviorTree {
         LoggerPtr->Debug("GoalHoldSec: {}", config.ShowcasePatrolSettings.GoalHoldSec);
         LoggerPtr->Debug("Random: {}", config.ShowcasePatrolSettings.Random);
         LoggerPtr->Debug("DisableTeamOffset: {}", config.ShowcasePatrolSettings.DisableTeamOffset);
+        LoggerPtr->Debug("IgnoreRecovery: {}", config.ShowcasePatrolSettings.IgnoreRecovery);
         LoggerPtr->Debug("------ NaviDebug ------");
         LoggerPtr->Debug("Enable: {}", config.NaviDebugSettings.Enable);
         LoggerPtr->Debug("PlanFile: {}", config.NaviDebugSettings.PlanFile);

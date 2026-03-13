@@ -205,6 +205,7 @@ BT 節點實際調用的就是這些函數。
 - `CompetitionProfile`
 - `LeagueStrategy.UseHealthRecovery / HealthRecoveryThreshold / UseAmmoRecovery / AmmoRecoveryThreshold / MainGoal / PatrolGoals / GoalHoldSec`
 - `ShowcasePatrol.Enable / Goals / GoalHoldSec / Random / DisableTeamOffset`
+- `ShowcasePatrol.IgnoreRecovery`
 - `NaviDebug.Enable / PlanFile / ActivePlan / IgnoreRecovery / DisableTeamOffset / SpeedLevel`
 - `Posture.DamageBurstWindowMs / DamageBurstThreshold / DamageBurstDefenseHoldSec`
 - `debug_bypass_is_start / wait_for_game_start_timeout_sec / league_referee_stale_timeout_ms`（ROS 參數，默認關閉）
@@ -219,6 +220,7 @@ BT 節點實際調用的就是這些函數。
 - `src/behavior_tree/Scripts/ConfigJson/showcase_competition.json`
 - `ShowcasePatrol.Goals = [6, 11, 14, 15]` 可直接改成你現場要演示的點位序列
 - `ShowcasePatrol.DisableTeamOffset = true` 時，`/ly/navi/goal` 直接發基礎 ID `0..18`
+- `ShowcasePatrol.IgnoreRecovery = true` 時，展示模式可在無裁判輸入時直接巡邏
 
 當前導航調試模式補充：
 - `src/behavior_tree/Scripts/ConfigJson/navi_debug_competition.json`

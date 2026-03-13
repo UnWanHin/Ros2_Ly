@@ -198,6 +198,7 @@
 - 展示巡逻点位在 `src/behavior_tree/Scripts/ConfigJson/showcase_competition.json` 的 `ShowcasePatrol.Goals` 修改。
 - `ShowcasePatrol.Random = true` 时随机切点。
 - `ShowcasePatrol.Random = false` 时按 `ShowcasePatrol.Goals` 数组顺序轮巡。
+- `ShowcasePatrol.IgnoreRecovery = true` 时忽略回血/补弹回补，适合无裁判系统的巡逻+姿态展示。
 - 若 `ShowcasePatrol.DisableTeamOffset = true`，展示模式会直接下发基础点位 ID `0..18` 到 `/ly/navi/goal`。
 
 常用命令：

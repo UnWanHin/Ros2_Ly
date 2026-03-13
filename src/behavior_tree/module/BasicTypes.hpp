@@ -401,6 +401,7 @@ namespace LangYa
         int GoalHoldSec{5};
         bool Random{false};
         bool DisableTeamOffset{false};
+        bool IgnoreRecovery{false};
     };
 
     struct NaviDebugSetting {

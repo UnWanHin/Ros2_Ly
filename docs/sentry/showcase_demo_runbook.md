@@ -151,6 +151,7 @@
 - `ShowcasePatrol.GoalHoldSec`：每个点停留秒数
 - `ShowcasePatrol.Random`：`true`=随机切点，`false`=按数组顺序轮巡
 - `ShowcasePatrol.DisableTeamOffset`：`true` 时 `/ly/navi/goal` 直接发基础 ID，不再对蓝方加 `+20`
+- `ShowcasePatrol.IgnoreRecovery`：`true` 时忽略回血/补弹回补逻辑，适合无裁判系统的展示场景
 
 顺序说明：
 
@@ -165,7 +166,8 @@
   "Goals": [6, 11, 14, 15],
   "GoalHoldSec": 5,
   "Random": true,
-  "DisableTeamOffset": true
+  "DisableTeamOffset": true,
+  "IgnoreRecovery": true
 }
 ```
 
@@ -175,6 +177,7 @@
 - 发布 `/ly/navi/goal`
 - 不发布 `/ly/navi/goal_pos`
 - `DisableTeamOffset = true` 时，展示模式下发的是基础点位 ID（`0..18`）
+- `IgnoreRecovery = true` 时，展示模式不会因为缺少血量/弹药回传而先切去 `Recovery`
 
 当前展示入口能力：
 
@@ -182,6 +185,7 @@
 - 有普通辅瞄
 - 有姿态展示
 - 有展示巡逻
+- 默认配置下会直接进入展示巡逻，不依赖裁判回血/弹药回传
 - 小陀螺不属于“独立强制常开模式”，是否输出 Rotate 仍由 `behavior_tree` 当前逻辑决定
 - 如果你只想单独测小陀螺，请改用 `./scripts/start_chassis_gyro_test.sh`
 

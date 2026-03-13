@@ -28,7 +28,8 @@
         "Goals": [6, 11, 14, 15],
         "GoalHoldSec": 5,
         "Random": true,
-        "DisableTeamOffset": true
+        "DisableTeamOffset": true,
+        "IgnoreRecovery": true
     },
     "Posture": {
         "Enable": true,

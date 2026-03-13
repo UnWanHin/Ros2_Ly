@@ -691,7 +691,7 @@ namespace BehaviorTree {
                 static_cast<int>(plan[goal_index]));
         };
 
-        if (CheckPositionRecovery()) {
+        if (!showcase.IgnoreRecovery && CheckPositionRecovery()) {
             LoggerPtr->Info("Showcase patrol recovery: health={} ammo={}", myselfHealth, ammoLeft);
             showcasePatrolGoalIndex_ = 0;
             showcasePatrolGoalInitialized_ = false;
