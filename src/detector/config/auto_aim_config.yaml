@@ -75,8 +75,8 @@
     "detector_config/use_ros_bag": false
     "detector_config.save_video": false
     "detector_config/save_video": false # 比赛建议 false；调试可开（当前功能受环境影响）
-    "detector_config.use_video": true
-    "detector_config/use_video": true   # 比赛建议 false；离车调试建议 true
+    "detector_config.use_video": false
+    "detector_config/use_video": false  # 比赛建议 false；离车调试建议 true
 
     # ----------------------------------------------------
     # 2. Solver 配置 (雙重相容區)

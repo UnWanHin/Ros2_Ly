@@ -57,6 +57,7 @@
 #include <ctime>
 #include <sstream>
 #include <initializer_list>
+#include <limits>
 
 using namespace ly_auto_aim;
 using namespace LangYa;
@@ -110,25 +111,60 @@ namespace {
     // 键盘输入处理类 (保持不变)
     class KeyboardInput {
     private:
-        struct termios original_termios;
-        int original_flags;
+        struct termios original_termios{};
+        int original_flags{-1};
+        int input_fd{-1};
+        bool own_fd{false};
         bool initialized = false;
+
+        bool initFromFd(int fd, bool take_ownership, const char* fd_name) {
+            if (fd < 0 || !isatty(fd)) {
+                return false;
+            }
+
+            if (tcgetattr(fd, &original_termios) != 0) {
+                return false;
+            }
+
+            int flags = fcntl(fd, F_GETFL, 0);
+            if (flags < 0) {
+                return false;
+            }
+
+            struct termios new_termios = original_termios;
+            new_termios.c_lflag &= ~(ICANON | ECHO);
+            if (tcsetattr(fd, TCSANOW, &new_termios) != 0) {
+                return false;
+            }
+
+            if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+                tcsetattr(fd, TCSANOW, &original_termios);
+                return false;
+            }
+
+            input_fd = fd;
+            own_fd = take_ownership;
+            original_flags = flags;
+            initialized = true;
+            std::cout << "✓ Terminal input mode initialized (" << fd_name << ")\n";
+            return true;
+        }
         
     public:
         KeyboardInput() {
-            try {
-                tcgetattr(STDIN_FILENO, &original_termios);
-                original_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
-                
-                struct termios new_termios = original_termios;
-                new_termios.c_lflag &= ~(ICANON | ECHO);
-                tcsetattr(STDIN_FILENO, TCSANOW, &new_termios);
-                fcntl(STDIN_FILENO, F_SETFL, original_flags | O_NONBLOCK);
-                initialized = true;
-                std::cout << "✓ Terminal input mode initialized\n";
-            } catch (...) {
-                std::cerr << "✗ Failed to initialize terminal input mode\n";
+            if (initFromFd(STDIN_FILENO, false, "stdin")) {
+                return;
             }
+
+            int tty_fd = open("/dev/tty", O_RDONLY);
+            if (tty_fd >= 0 && initFromFd(tty_fd, true, "/dev/tty")) {
+                return;
+            }
+
+            if (tty_fd >= 0) {
+                close(tty_fd);
+            }
+            std::cerr << "✗ Terminal input disabled: no interactive TTY available\n";
         }
         
         ~KeyboardInput() {
@@ -137,28 +173,36 @@ namespace {
         
         void restore() {
             if (initialized) {
-                try {
-                    tcsetattr(STDIN_FILENO, TCSANOW, &original_termios);
-                    fcntl(STDIN_FILENO, F_SETFL, original_flags);
-                    std::cout << "\n✓ Terminal input mode restored\n";
-                    initialized = false;
-                } catch (...) {
-                    std::cerr << "✗ Failed to restore terminal input mode\n";
+                if (input_fd >= 0) {
+                    tcsetattr(input_fd, TCSANOW, &original_termios);
+                    if (original_flags >= 0) {
+                        fcntl(input_fd, F_SETFL, original_flags);
+                    }
                 }
+                std::cout << "\n✓ Terminal input mode restored\n";
+                initialized = false;
             }
+
+            if (own_fd && input_fd >= 0) {
+                close(input_fd);
+            }
+
+            input_fd = -1;
+            own_fd = false;
+            original_flags = -1;
         }
         
         char getKey() {
-            if (!initialized) return 0;
+            if (!initialized || input_fd < 0) return 0;
             char key;
-            if (read(STDIN_FILENO, &key, 1) == 1) {
+            if (read(input_fd, &key, 1) == 1) {
                 return key;
             }
             return 0;
         }
         
         std::string getLine() {
-            if (!initialized) return "";
+            if (!initialized || input_fd != STDIN_FILENO) return "";
             
             // 临时恢复正常输入模式
             tcsetattr(STDIN_FILENO, TCSANOW, &original_termios);
@@ -215,6 +259,9 @@ namespace {
         std::atomic<bool> is_shooting{false};
         rclcpp::Time shoot_start_time;
         const double shoot_duration = 0.3;
+        bool fire_require_dual_axis_lock = true;
+        double fire_max_yaw_error_deg = 8.0;
+        double fire_max_pitch_error_deg = 5.0;
         
         // 瞄准状态
         std::atomic<bool> is_aiming{false};
@@ -258,13 +305,20 @@ namespace {
         rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr firecode_pub_;
 
     public:
-        ShootingTableCalibNode() : Node(AppName), pnpSolver(cameraIntrinsics)
+        ShootingTableCalibNode()
+            : Node(
+                  AppName,
+                  rclcpp::NodeOptions()
+                      .allow_undeclared_parameters(true)
+                      .automatically_declare_parameters_from_overrides(true)),
+              pnpSolver(cameraIntrinsics)
         {
-            // 在構造函數中初始化指針
-            // 注意：solver 等模塊可能需要全局節點指針，這將在 main 函數中處理
-            
-            // 延遲初始化，確保 parameter server 準備好
-            // 這裡直接調用初始化流程
+        }
+
+        void Initialize()
+        {
+            // 注意：solver/predictor/controller 在 create*() 時會讀取全局 node 指針；
+            // 必須先由 main 設置全局指針，再執行初始化流程。
             loadShootTableParams();
             initializeVideo();
             initializeCamera();
@@ -273,11 +327,11 @@ namespace {
             setupRosTopics();
             createCSVFile();
             printInstructions();
-            
+
             if (web_show) {
                 VideoStreamer::init();
             }
-            
+
             last_param_check = this->now();
         }
         
@@ -347,6 +401,11 @@ namespace {
 
             roslog::info("Loaded shoot table params - yaw coef_d2: {}", shoot_table_params.yaw.coef_d2);
             roslog::info("Loaded shoot table params - Enable: {}", shoot_table_params.enable);
+
+            // Fire guard: only allow fire when yaw/pitch are both converged.
+            getParamSafe("shooting_table_calib.fire_require_dual_axis_lock", fire_require_dual_axis_lock, true);
+            getParamSafe("shooting_table_calib.fire_max_yaw_error_deg", fire_max_yaw_error_deg, 8.0);
+            getParamSafe("shooting_table_calib.fire_max_pitch_error_deg", fire_max_pitch_error_deg, 5.0);
         }
         
         void initializeVideo()
@@ -517,18 +576,20 @@ namespace {
             }
         }
 
-        void sendAimOnlyCommand()
+        void sendAimOnlyCommand(bool verbose = true)
         {
             gimbal_driver::msg::GimbalAngles control_msg;
             control_msg.yaw = target_yaw + yaw_adjustment;
             control_msg.pitch = target_pitch + pitch_adjustment;
             
             control_pub_->publish(control_msg);
-            
-            roslog::info("Aim command sent - Yaw: {:.2f}°, Pitch: {:.2f}°", 
-                         control_msg.yaw, control_msg.pitch);
-            std::cout << "🎯 Aim only - Yaw: " << std::fixed << std::setprecision(2) 
-                      << control_msg.yaw << "°, Pitch: " << control_msg.pitch << "°\n";
+
+            if (verbose) {
+                roslog::info("Aim command sent - Yaw: {:.2f}°, Pitch: {:.2f}°",
+                             control_msg.yaw, control_msg.pitch);
+                std::cout << "🎯 Aim only - Yaw: " << std::fixed << std::setprecision(2)
+                          << control_msg.yaw << "°, Pitch: " << control_msg.pitch << "°\n";
+            }
         }
 
         void sendControlCommand()
@@ -548,6 +609,23 @@ namespace {
                          target_msg.yaw, target_msg.pitch);
             std::cout << "🔥 Target published - Yaw: " << std::fixed << std::setprecision(2) 
                       << target_msg.yaw << "°, Pitch: " << target_msg.pitch << "°\n";
+        }
+
+        bool isDualAxisLockConverged(double* yaw_err_out = nullptr, double* pitch_err_out = nullptr) const
+        {
+            const double cmd_yaw = target_yaw + yaw_adjustment;
+            const double cmd_pitch = target_pitch + pitch_adjustment;
+            const double yaw_err = std::abs(std::remainder(cmd_yaw - current_gimbal_angles.yaw, 360.0));
+            const double pitch_err = std::abs(cmd_pitch - current_gimbal_angles.pitch);
+
+            if (yaw_err_out) {
+                *yaw_err_out = yaw_err;
+            }
+            if (pitch_err_out) {
+                *pitch_err_out = pitch_err;
+            }
+
+            return (yaw_err <= fire_max_yaw_error_deg) && (pitch_err <= fire_max_pitch_error_deg);
         }
 
         void sendStopCommand()
@@ -626,7 +704,20 @@ namespace {
             std::vector<ArmorObject> filtered_armors;
             ArmorType target = ArmorType::Infantry2;
             
-            if (!filter.Filter(detected_armors, target, filtered_armors)) {
+            const bool has_filtered_target = filter.Filter(detected_armors, target, filtered_armors);
+            if (!has_filtered_target) {
+                if (draw_image) {
+                    std::pair<std::vector<tracker::TrackResult>, std::vector<tracker::CarTrackResult>> empty_tracks;
+                    drawDebugInfo(image, detected_armors, cars, empty_tracks);
+                    cv::putText(
+                        image,
+                        "No filtered target (check team / target id)",
+                        cv::Point(10, 90),
+                        cv::FONT_HERSHEY_SIMPLEX,
+                        0.65,
+                        cv::Scalar(0, 0, 255),
+                        2);
+                }
                 if (web_show) {
                     VideoStreamer::setFrame(image);
                 }
@@ -648,23 +739,37 @@ namespace {
             solver->solve_all(track_results, gimbal_angle);
 
             if (should_aim_once.load() && !track_results.first.empty()) {
-                auto& best_track = track_results.first[0];
-                XYZ target_xyz = best_track.location.xyz_imu;
+                const auto* best_track = selectBestTrackForAim(track_results.first);
+                if (!best_track) {
+                    std::cout << "✗ No valid track for aim. Try again.\n";
+                    should_aim_once.store(false);
+                    return;
+                }
+
+                XYZ target_xyz = best_track->location.xyz_imu;
                 
                 if (calculateBallisticSolution(target_xyz)) {
                     current_target_world = cv::Point3d(target_xyz.x, target_xyz.y, target_xyz.z);
                     is_aiming.store(true);
                     control_valid.store(true);
+                    aim_only_mode.store(true);
+                    is_shooting.store(false);
                     should_aim_once.store(false);
                     
                     double distance = std::sqrt(target_xyz.x * target_xyz.x + target_xyz.y * target_xyz.y);
                     double fitted_pitch_val = fitPitch(target_xyz.z, distance);
                     double fitted_yaw_val = fitYaw(target_xyz.z, distance);
+
+                    // `a` should really "lock and point once", not just cache setpoints.
+                    sendAimOnlyCommand();
+                    updateFireControl(false);
                     
                     std::cout << "✓ Target locked! Control enabled\n";
+                    std::cout << "  Track car/armor: " << best_track->car_id << "/" << best_track->armor_id << "\n";
                     std::cout << "  Target distance: " << distance << "m\n";
                     std::cout << "  Ballistic pitch: " << target_pitch << "°\n";
                     std::cout << "  Fitted pitch: " << fitted_pitch_val << "°\n";
+                    std::cout << "  Fitted yaw: " << fitted_yaw_val << "°\n";
                 } else {
                     std::cout << "✗ Ballistic calculation failed\n";
                     should_aim_once.store(false);
@@ -683,6 +788,39 @@ namespace {
             }
         }
 
+        const tracker::TrackResult* selectBestTrackForAim(
+            const std::vector<tracker::TrackResult>& tracks) const
+        {
+            const tracker::TrackResult* best_track = nullptr;
+            double best_score = std::numeric_limits<double>::max();
+            const double PI = 3.1415926;
+
+            for (const auto& track : tracks) {
+                XYZ xyz = track.location.xyz_imu;
+                const double horizontal_distance = std::sqrt(xyz.x * xyz.x + xyz.y * xyz.y);
+                const double distance = std::sqrt(horizontal_distance * horizontal_distance + xyz.z * xyz.z);
+                if (distance < 1e-6) {
+                    continue;
+                }
+
+                double yaw_deg = std::atan2(xyz.y, xyz.x) * 180.0 / PI;
+                yaw_deg = current_gimbal_angles.yaw +
+                          std::remainder(yaw_deg - current_gimbal_angles.yaw, 360.0);
+                const double pitch_deg = std::atan2(xyz.z, horizontal_distance) * 180.0 / PI;
+
+                const double yaw_err = std::abs(std::remainder(yaw_deg - current_gimbal_angles.yaw, 360.0));
+                const double pitch_err = std::abs(pitch_deg - current_gimbal_angles.pitch);
+                const double score = yaw_err + 1.5 * pitch_err;
+
+                if (score < best_score) {
+                    best_score = score;
+                    best_track = &track;
+                }
+            }
+
+            return best_track;
+        }
+
         void drawDebugInfo(cv::Mat& image, const std::vector<ArmorObject>& armors, 
                           const std::vector<CarDetection>& cars, 
                           const std::pair<std::vector<tracker::TrackResult>, std::vector<tracker::CarTrackResult>>& track_results)
@@ -699,9 +837,39 @@ namespace {
                                   (control_valid.load() ? " [CTRL ON]" : " [CTRL OFF]");
             cv::putText(image, adj_text, cv::Point(10, 30), 
                        cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(255, 255, 0), 2);
-            
-            // ... (Drawing logic remains largely same, just standard OpenCV) ...
-            // Simplified for brevity, standard OpenCV calls work fine in ROS 2
+
+            const std::string stat_text =
+                "armor=" + std::to_string(armors.size()) +
+                " car=" + std::to_string(cars.size()) +
+                " track=" + std::to_string(track_results.first.size());
+            cv::putText(image, stat_text, cv::Point(10, 60),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.65, cv::Scalar(0, 255, 255), 2);
+
+            for (const auto& armor : armors) {
+                for (const auto& point : armor.apex) {
+                    cv::circle(image, point, 4, cv::Scalar(0, 0, 255), -1);
+                }
+                cv::line(image, armor.apex[0], armor.apex[2], cv::Scalar(255, 0, 0), 2);
+                cv::line(image, armor.apex[1], armor.apex[3], cv::Scalar(0, 255, 0), 2);
+
+                std::vector<cv::Point2f> pts(armor.apex, armor.apex + 4);
+                cv::Rect bbox = cv::boundingRect(pts);
+                cv::rectangle(image, bbox, cv::Scalar(0, 200, 255), 2);
+
+                const std::string armor_text =
+                    "type=" + std::to_string(armor.type) +
+                    " " + (armor.ActualColor() == ArmorObject::Blue ? "B" : "R");
+                cv::putText(image, armor_text, cv::Point(bbox.x, std::max(20, bbox.y - 8)),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(255, 255, 255), 2);
+            }
+
+            for (const auto& car : cars) {
+                cv::Rect car_box = car.bounding_rect;
+                cv::rectangle(image, car_box, cv::Scalar(0, 255, 0), 2);
+                const std::string car_text = "car id=" + std::to_string(car.tag_id);
+                cv::putText(image, car_text, cv::Point(car_box.x, std::max(20, car_box.y - 8)),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 255, 0), 2);
+            }
         }
 
         bool calculateBallisticSolution(const XYZ& target_xyz)
@@ -742,6 +910,11 @@ namespace {
                 
                 target_pitch = aim_pitch_rad * 180 / PI;
                 target_yaw = aim_yaw_rad * 180 / PI;
+
+                if (shoot_table_params.enable) {
+                    target_pitch += fitPitch(target_xyz.z, distance);
+                    target_yaw += fitYaw(target_xyz.z, distance);
+                }
                 
                 target_yaw = current_gimbal_angles.yaw + 
                              std::remainder(target_yaw - current_gimbal_angles.yaw, 360.0);
@@ -872,6 +1045,15 @@ namespace {
                     break;
                 case 'f':
                     if (is_aiming.load()) {
+                        double yaw_err = 0.0;
+                        double pitch_err = 0.0;
+                        const bool lock_ok = isDualAxisLockConverged(&yaw_err, &pitch_err);
+                        if (fire_require_dual_axis_lock && !lock_ok) {
+                            std::cout << "✗ Fire blocked: lock not converged (yaw_err=" << std::fixed << std::setprecision(2)
+                                      << yaw_err << "°, pitch_err=" << pitch_err << "°)\n";
+                            updateFireControl(false);
+                            break;
+                        }
                         aim_only_mode.store(false);
                         is_shooting.store(true);
                         shoot_start_time = this->now();
@@ -950,6 +1132,20 @@ namespace {
                     processImageDetections();
                     
                     if (is_shooting.load()) {
+                        if (fire_require_dual_axis_lock) {
+                            double yaw_err = 0.0;
+                            double pitch_err = 0.0;
+                            if (!isDualAxisLockConverged(&yaw_err, &pitch_err)) {
+                                is_shooting.store(false);
+                                updateFireControl(false);
+                                sendStopCommand();
+                                std::cout << "✗ Fire stopped: lock lost (yaw_err=" << std::fixed << std::setprecision(2)
+                                          << yaw_err << "°, pitch_err=" << pitch_err << "°)\n";
+                                rclcpp::spin_some(this->get_node_base_interface());
+                                rate.sleep();
+                                continue;
+                            }
+                        }
                         rclcpp::Time current_time = this->now();
                         if ((current_time - shoot_start_time).seconds() >= shoot_duration) {
                             is_shooting.store(false);
@@ -958,11 +1154,17 @@ namespace {
                         } else {
                             sendControlCommand();
                         }
+                    } else if (aim_only_mode.load() && is_aiming.load() && control_valid.load()) {
+                        // Keep publishing hold-aim command for stable lock during calibration.
+                        sendAimOnlyCommand(false);
                     }
                     
                     rclcpp::spin_some(this->get_node_base_interface());
                     rate.sleep();
                 } catch (const std::exception& e) {
+                    if (!rclcpp::ok()) {
+                        break;
+                    }
                     std::cerr << "Error loop: " << e.what() << std::endl;
                 }
             }
@@ -984,6 +1186,7 @@ int main(int argc, char** argv)
     ly_auto_aim::controller::global_controller_node = node;
     
     try {
+        node->Initialize();
         node->spin_loop();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

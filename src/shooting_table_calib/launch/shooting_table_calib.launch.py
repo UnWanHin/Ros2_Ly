@@ -28,6 +28,7 @@ def generate_launch_description():
     use_gimbal = LaunchConfiguration("use_gimbal")
     use_calib = LaunchConfiguration("use_calib")
     team_red = LaunchConfiguration("team_red")
+    debug_team_blue = LaunchConfiguration("debug_team_blue")
     web_show = LaunchConfiguration("web_show")
     draw_image = LaunchConfiguration("draw_image")
 
@@ -45,6 +46,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_gimbal", default_value="true"),
         DeclareLaunchArgument("use_calib", default_value="true"),
         DeclareLaunchArgument("team_red", default_value="true"),
+        DeclareLaunchArgument("debug_team_blue", default_value="false"),
         DeclareLaunchArgument("web_show", default_value="true"),
         DeclareLaunchArgument("draw_image", default_value="true"),
     ]
@@ -76,6 +78,8 @@ def generate_launch_description():
                     "detector_config.detector_path": os.path.join(detector_share, "Extras", "armor_detector_model.xml"),
                     "detector_config.car_model_path": os.path.join(detector_share, "Extras", "car_detector_model.xml"),
                     "team_red": team_red,
+                    "detector_config.debug_team_blue": debug_team_blue,
+                    "detector_config/debug_team_blue": debug_team_blue,
                     "web_show": web_show,
                     "draw_image": draw_image,
                 }

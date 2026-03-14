@@ -26,7 +26,7 @@
     "ShowcasePatrol": {
         "Enable": true,
         "Goals": [1, 2, 3, 4],
-        "GoalHoldSec": 5,
+        "GoalHoldSec": 10,
         "Random": false,
         "DisableTeamOffset": true,
         "IgnoreRecovery": true

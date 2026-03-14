@@ -1,6 +1,7 @@
 #include "../include/Application.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 using namespace LangYa;
 
@@ -144,12 +145,36 @@ namespace BehaviorTree {
         bool FindTarget = isFindTargetAtomic;
         auto now = std::chrono::steady_clock::now();
         if (FindTarget) {
-            const bool allow_fire = (aimMode == AimMode::Buff) ? buffAimData.FireStatus
-                                 : (aimMode == AimMode::Outpost ? outpostAimData.FireStatus : true);
+            const auto& locked_angles = (aimMode == AimMode::Buff) ? buffAimData.Angles
+                                     : (aimMode == AimMode::Outpost ? outpostAimData.Angles : autoAimData.Angles);
+            const bool target_status_allow_fire = (aimMode == AimMode::Buff) ? buffAimData.FireStatus
+                                             : (aimMode == AimMode::Outpost ? outpostAimData.FireStatus : autoAimData.FireStatus);
+            bool allow_fire = target_status_allow_fire;
+            if (!config.AimDebugSettings.FireRequireTargetStatus) {
+                allow_fire = true;
+            }
+            if (allow_fire && config.AimDebugSettings.FireRequireAngleConverged) {
+                const float yaw_error = std::remainder(locked_angles.Yaw - gimbalAngles.Yaw, 360.0f);
+                const float pitch_error = locked_angles.Pitch - gimbalAngles.Pitch;
+                const bool lock_converged = (std::abs(yaw_error) <= config.AimDebugSettings.FireMaxYawErrorDeg) &&
+                                            (std::abs(pitch_error) <= config.AimDebugSettings.FireMaxPitchErrorDeg);
+                if (!lock_converged) {
+                    allow_fire = false;
+                    static auto last_guard_log = std::chrono::steady_clock::time_point{};
+                    if (now - last_guard_log > std::chrono::milliseconds(500)) {
+                        LoggerPtr->Debug(
+                            "Fire blocked by angle guard: yaw_err={} pitch_err={} (max {} / {})",
+                            yaw_error, pitch_error,
+                            config.AimDebugSettings.FireMaxYawErrorDeg,
+                            config.AimDebugSettings.FireMaxPitchErrorDeg);
+                        last_guard_log = now;
+                    }
+                }
+            }
             LoggerPtr->Debug("Find Target, AimMode={}, AllowFire={}", static_cast<int>(aimMode), allow_fire);
             if (!config.AimDebugSettings.StopFire){
                 if(aimMode == AimMode::Buff) { // 打符模式
-                    if(buffAimData.FireStatus){
+                    if(allow_fire){
                         /// 立刻响应不需要tick
                         RecFireCode.FlipFireStatus();
                         gimbalControlData.FireCode.FireStatus = RecFireCode.FireStatus;

@@ -68,7 +68,7 @@ endif()
 
 # 5. 編譯節點 (Node)
 add_executable(${PROJECT_NAME}_node
-    shooting_table_node.cpp
+    shooting_table_nodev1.cpp
 )
 
 target_include_directories(${PROJECT_NAME}_node PRIVATE

@@ -366,6 +366,10 @@ namespace LangYa
         bool HitOutpost{false};
         bool HitBuff{false};
         bool HitCar{false};
+        bool FireRequireTargetStatus{true};
+        bool FireRequireAngleConverged{false};
+        float FireMaxYawErrorDeg{8.0f};
+        float FireMaxPitchErrorDeg{5.0f};
     };
 
     // 频率相关
