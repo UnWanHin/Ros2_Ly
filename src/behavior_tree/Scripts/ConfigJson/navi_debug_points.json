@@ -1,5 +1,5 @@
 {
-    "ActivePlan": "test_site_random",
+    "ActivePlan": "test_site_sequence",
     "Plans": {
         "test_site_random": {
             "Mode": "random",
@@ -15,7 +15,7 @@
             "SpeedLevel": 1,
             "DisableTeamOffset": true,
             "IgnoreRecovery": true,
-            "Goals": [3, 6, 11, 16]
+            "Goals": [1, 2, 3, 4]
         }
     }
 }
