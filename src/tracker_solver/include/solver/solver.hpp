@@ -95,8 +95,11 @@ public:
         double imu_yaw = imuData.yaw;
         double imu_pitch = imuData.pitch;
         Eigen::Vector3d in_eigen = Eigen::Vector3d(in.x, in.y, in.z);
-        Eigen::Vector3d gimbal = Eigen::AngleAxisd(imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
-                                 * Eigen::AngleAxisd(-imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix()
+        // Keep this as the exact inverse of camera2world():
+        // world = Ry(-pitch) * Rz(yaw) * gimbal
+        // gimbal = Rz(-yaw) * Ry(pitch) * world
+        Eigen::Vector3d gimbal = Eigen::AngleAxisd(-imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix()
+                                 * Eigen::AngleAxisd(imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
                                             * in_eigen;
         Eigen::Vector3d camera = cameraRotationMatrix.inverse() * (gimbal - cameraOffset);
 

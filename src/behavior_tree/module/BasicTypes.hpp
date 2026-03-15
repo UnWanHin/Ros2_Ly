@@ -344,6 +344,8 @@ namespace LangYa
     struct AimData { // 打符或辅瞄模式接收的数据
         bool FireStatus{false}; // true 表示开火
         bool BuffFollow{false};  // 用于打符的跟随
+        bool Valid{false};       // 当前模式可直接使用的完整 yaw/pitch 对
+        bool Fresh{false};       // 本循环内是否收到新的一帧
         GimbalAnglesType Angles; // 云台的控制角度
     };
     enum class AimMode : std::uint8_t { // 瞄准模式

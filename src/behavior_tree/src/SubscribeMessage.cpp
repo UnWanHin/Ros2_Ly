@@ -213,18 +213,19 @@ namespace BehaviorTree{
             auto &obj = app;
             obj.autoAimData.BuffFollow = false;
             obj.autoAimData.FireStatus = msg->status;
+            obj.autoAimData.Fresh = true;
             if (msg->status && std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
                 obj.autoAimData.Angles = GimbalAnglesType{
                     static_cast<AngleType>(msg->yaw),
                     static_cast<AngleType>(msg->pitch)
                 };
+                obj.autoAimData.Valid = true;
                 obj.isFindTargetAtomic = true;
                 obj.lastTargetSeenTime = std::chrono::steady_clock::now();
                 obj.LoggerPtr->Info("Predictor target valid, update auto-aim angles.");
             } else {
-                // Keep last valid pair (yaw/pitch) when predictor marks this frame invalid.
-                // This avoids invalid frames causing twitchy one-axis jumps.
-                obj.LoggerPtr->Debug("Predictor target invalid, keep last valid auto-aim angles.");
+                obj.autoAimData.Valid = false;
+                obj.LoggerPtr->Debug("Predictor target invalid, clear auto-aim frame.");
             }
         });
 
@@ -233,16 +234,19 @@ namespace BehaviorTree{
             auto  &obj = app;
             obj.buffAimData.FireStatus = msg->status;
             obj.buffAimData.BuffFollow = true;
+            obj.buffAimData.Fresh = true;
             if (std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
                 obj.buffAimData.Angles = GimbalAnglesType{
                     static_cast<AngleType>(msg->yaw),
                     static_cast<AngleType>(msg->pitch)
                 };
+                obj.buffAimData.Valid = true;
                 // buff 模式下 status 表示“是否可开火”，不是“是否有角度跟随”
                 obj.isFindTargetAtomic = true;
                 obj.lastTargetSeenTime = std::chrono::steady_clock::now();
             } else {
-                obj.LoggerPtr->Debug("Buff target invalid (non-finite yaw/pitch), keep last valid angles.");
+                obj.buffAimData.Valid = false;
+                obj.LoggerPtr->Debug("Buff target invalid, clear buff frame.");
             }
         });
 
@@ -251,15 +255,18 @@ namespace BehaviorTree{
             auto &obj = app;
             obj.outpostAimData.FireStatus = msg->status;
             obj.outpostAimData.BuffFollow = false;
+            obj.outpostAimData.Fresh = true;
             if (msg->status && std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
                 obj.outpostAimData.Angles = GimbalAnglesType{
                     static_cast<AngleType>(msg->yaw),
                     static_cast<AngleType>(msg->pitch)
                 };
+                obj.outpostAimData.Valid = true;
                 obj.isFindTargetAtomic = true;
                 obj.lastTargetSeenTime = std::chrono::steady_clock::now();
             } else {
-                obj.LoggerPtr->Debug("Outpost target invalid, keep last valid outpost angles.");
+                obj.outpostAimData.Valid = false;
+                obj.LoggerPtr->Debug("Outpost target invalid, clear outpost frame.");
             }
         });
 

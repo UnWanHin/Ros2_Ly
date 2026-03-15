@@ -48,9 +48,12 @@ public:
             Yp[i] = Yp_auto_jet[i].a;
             H.block(i, 0, 1, N_X) = Yp_auto_jet[i].v.transpose();
         }
-        K = P * H.transpose() * (H * P * H.transpose() + R).inverse();
+        const MatrixYY S = H * P * H.transpose() + R;
+        K = P * H.transpose() * S.inverse();
         Xe = Xp + K * (Y - Yp);
-        P = (MatrixXX::Identity() - K * H) * P;
+        const MatrixXX I = MatrixXX::Identity();
+        const MatrixXX I_KH = I - K * H;
+        P = I_KH * P * I_KH.transpose() + K * R * K.transpose();
         return Xe;
     }
 
@@ -113,9 +116,12 @@ public:
             Yp1[i] = Yp_auto_jet[i].a;
             H1.block(i, 0, 1, N_X) = Yp_auto_jet[i].v.transpose();
         }
-        K1 = P * H1.transpose() * (H1 * P * H1.transpose() + R1).inverse();
+        const MatrixYY1 S1 = H1 * P * H1.transpose() + R1;
+        K1 = P * H1.transpose() * S1.inverse();
         Xe = Xp + K1 * (Y1 - Yp1);
-        P = (MatrixXX::Identity() - K1 * H1) * P;
+        const MatrixXX I = MatrixXX::Identity();
+        const MatrixXX I_KH1 = I - K1 * H1;
+        P = I_KH1 * P * I_KH1.transpose() + K1 * R1 * K1.transpose();
         return Xe;
     }
 
@@ -132,9 +138,12 @@ public:
             Yp2[i] = Yp_auto_jet[i].a;
             H2.block(i, 0, 1, N_X) = Yp_auto_jet[i].v.transpose();
         }
-        K2 = P * H2.transpose() * (H2 * P * H2.transpose() + R2).inverse();
+        const MatrixYY2 S2 = H2 * P * H2.transpose() + R2;
+        K2 = P * H2.transpose() * S2.inverse();
         Xe = Xp + K2 * (Y2 - Yp2);
-        P = (MatrixXX::Identity() - K2 * H2) * P;
+        const MatrixXX I = MatrixXX::Identity();
+        const MatrixXX I_KH2 = I - K2 * H2;
+        P = I_KH2 * P * I_KH2.transpose() + K2 * R2 * K2.transpose();
         return Xe;
     }
 

@@ -747,6 +747,18 @@ namespace {
                 }
 
                 XYZ target_xyz = best_track->location.xyz_imu;
+                const double target_distance =
+                    std::sqrt(target_xyz.x * target_xyz.x + target_xyz.y * target_xyz.y + target_xyz.z * target_xyz.z);
+                roslog::info(
+                    "Aim request - car_id={}, armor_id={}, xyz=({:.3f}, {:.3f}, {:.3f}), dist={:.3f}, gimbal=(yaw={:.2f}, pitch={:.2f})",
+                    best_track->car_id,
+                    best_track->armor_id,
+                    target_xyz.x,
+                    target_xyz.y,
+                    target_xyz.z,
+                    target_distance,
+                    current_gimbal_angles.yaw,
+                    current_gimbal_angles.pitch);
                 
                 if (calculateBallisticSolution(target_xyz)) {
                     current_target_world = cv::Point3d(target_xyz.x, target_xyz.y, target_xyz.z);
@@ -759,6 +771,17 @@ namespace {
                     double distance = std::sqrt(target_xyz.x * target_xyz.x + target_xyz.y * target_xyz.y);
                     double fitted_pitch_val = fitPitch(target_xyz.z, distance);
                     double fitted_yaw_val = fitYaw(target_xyz.z, distance);
+                    roslog::info(
+                        "Aim solved - xyz=({:.3f}, {:.3f}, {:.3f}), solved=(yaw={:.2f}, pitch={:.2f}), adjust=(yaw={:.2f}, pitch={:.2f}), cmd=(yaw={:.2f}, pitch={:.2f})",
+                        target_xyz.x,
+                        target_xyz.y,
+                        target_xyz.z,
+                        target_yaw,
+                        target_pitch,
+                        yaw_adjustment,
+                        pitch_adjustment,
+                        target_yaw + yaw_adjustment,
+                        target_pitch + pitch_adjustment);
 
                     // `a` should really "lock and point once", not just cache setpoints.
                     sendAimOnlyCommand();
@@ -771,6 +794,13 @@ namespace {
                     std::cout << "  Fitted pitch: " << fitted_pitch_val << "°\n";
                     std::cout << "  Fitted yaw: " << fitted_yaw_val << "°\n";
                 } else {
+                    roslog::warn(
+                        "Aim solve failed - xyz=({:.3f}, {:.3f}, {:.3f}), gimbal=(yaw={:.2f}, pitch={:.2f})",
+                        target_xyz.x,
+                        target_xyz.y,
+                        target_xyz.z,
+                        current_gimbal_angles.yaw,
+                        current_gimbal_angles.pitch);
                     std::cout << "✗ Ballistic calculation failed\n";
                     should_aim_once.store(false);
                 }
