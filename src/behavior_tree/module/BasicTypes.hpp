@@ -372,6 +372,7 @@ namespace LangYa
         bool FireRequireAngleConverged{false};
         float FireMaxYawErrorDeg{8.0f};
         float FireMaxPitchErrorDeg{5.0f};
+        int FireMinConvergedFrames{1};
     };
 
     // 频率相关

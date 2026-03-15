@@ -154,6 +154,7 @@ namespace LangYa {
         ad.FireRequireAngleConverged = j.value("FireRequireAngleConverged", ad.FireRequireAngleConverged);
         ad.FireMaxYawErrorDeg = j.value("FireMaxYawErrorDeg", ad.FireMaxYawErrorDeg);
         ad.FireMaxPitchErrorDeg = j.value("FireMaxPitchErrorDeg", ad.FireMaxPitchErrorDeg);
+        ad.FireMinConvergedFrames = j.value("FireMinConvergedFrames", ad.FireMinConvergedFrames);
     }
 
     void from_json(const json& j, Rate& r) {
@@ -288,6 +289,7 @@ namespace BehaviorTree {
         LoggerPtr->Debug("FireRequireAngleConverged: {}", config.AimDebugSettings.FireRequireAngleConverged);
         LoggerPtr->Debug("FireMaxYawErrorDeg: {}", config.AimDebugSettings.FireMaxYawErrorDeg);
         LoggerPtr->Debug("FireMaxPitchErrorDeg: {}", config.AimDebugSettings.FireMaxPitchErrorDeg);
+        LoggerPtr->Debug("FireMinConvergedFrames: {}", config.AimDebugSettings.FireMinConvergedFrames);
         LoggerPtr->Debug("------ Rate ------");
         LoggerPtr->Debug("FireRate: {}", config.RateSettings.FireRate);
         LoggerPtr->Debug("TickRate: {}", config.RateSettings.TreeTickRate);
