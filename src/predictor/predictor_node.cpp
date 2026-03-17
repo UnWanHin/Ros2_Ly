@@ -124,19 +124,20 @@ namespace {
 
                 TrackResultPairs track_results;
                 convertMsgToTrackResults(msg, track_results, gimbal_angle);
-                int target = static_cast<int>(automic_target.load());
-                float bullet_speed = static_cast<float>(atomic_bullet_speed.load());
-                
-                ly_auto_aim::controller::ControlResult control_result = controller->control(gimbal_angle, target, bullet_speed);  
-
                 // 【核心修復 B】接收消息時，清洗時間戳
                 double msg_time_sec = rclcpp::Time(msg->header.stamp).seconds();
                 Time::TimeStamp timestamp(msg_time_sec);
 
-                // 使用轉換後的 timestamp 傳入
+                // 先用当前帧观测更新状态，再做 control，避免控制永远落后一帧。
                 predictor->update(track_results, timestamp); 
 
+                int target = static_cast<int>(automic_target.load());
+                float bullet_speed = static_cast<float>(atomic_bullet_speed.load());
+                ly_auto_aim::controller::ControlResult control_result =
+                    controller->control(gimbal_angle, target, bullet_speed);  
+
                 auto_aim_common::msg::Target target_msg;
+                //TODO check
                 target_msg.status = control_result.valid;  
                 target_msg.yaw = control_result.yaw_actual_want;
                 target_msg.pitch = control_result.pitch_actual_want;
@@ -160,8 +161,10 @@ namespace {
                     debug_filter_msg.radius_2 = prediction.r2;
                 }
 
-                if(control_result.valid){
-                    node.Publisher<ly_predictor_target>()->publish(target_msg);
+                // Always publish predictor target for observability.
+                // Consumers should gate by target_msg.status.
+                node.Publisher<ly_predictor_target>()->publish(target_msg);
+                if (control_result.valid) {
                     node.Publisher<ly_predictor_debug>()->publish(debug_filter_msg);
                 }
             }

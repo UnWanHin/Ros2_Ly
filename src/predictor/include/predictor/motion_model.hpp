@@ -171,10 +171,15 @@ public:
         id2 = -1;
     }
 private:
+    MatrixXX buildProcessNoise(double dt) const;
+    void refreshNoiseCovariances(double dt, double measurement_scale = 1.0);
+    double computeMeasurementScale(const VectorY& innovation) const;
+    VectorY limitInnovation(const VectorY& innovation) const;
     bool whole_car_stable = true;
     bool armor_stable = false;
     int id1 = -1;
     int id2 = -1;
+    MatrixYY base_measurement_noise_ = MatrixYY::Identity();
     VectorX first_state_estimate(const VectorY& measure, const int armor_id)
     {
         VectorX state;

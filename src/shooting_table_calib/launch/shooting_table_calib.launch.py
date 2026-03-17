@@ -21,15 +21,23 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     detector_share = get_package_share_directory("detector")
-    default_config_file = os.path.join(detector_share, "config", "auto_aim_config.yaml")
+    behavior_tree_share = get_package_share_directory("behavior_tree")
+    default_config_file = os.path.join(behavior_tree_share, "config", "auto_aim_config_competition.yaml")
 
     config_file = LaunchConfiguration("config_file")
     output = LaunchConfiguration("output")
     use_gimbal = LaunchConfiguration("use_gimbal")
     use_calib = LaunchConfiguration("use_calib")
     team_red = LaunchConfiguration("team_red")
+    debug_team_blue = LaunchConfiguration("debug_team_blue")
     web_show = LaunchConfiguration("web_show")
     draw_image = LaunchConfiguration("draw_image")
+    auto_lock_fire = LaunchConfiguration("auto_lock_fire")
+    auto_fire = LaunchConfiguration("auto_fire")
+    auto_target_type = LaunchConfiguration("auto_target_type")
+    record_dir = LaunchConfiguration("record_dir")
+    csv_strategy = LaunchConfiguration("csv_strategy")
+    csv_path = LaunchConfiguration("csv_path")
 
     launch_args = [
         DeclareLaunchArgument(
@@ -45,13 +53,26 @@ def generate_launch_description():
         DeclareLaunchArgument("use_gimbal", default_value="true"),
         DeclareLaunchArgument("use_calib", default_value="true"),
         DeclareLaunchArgument("team_red", default_value="true"),
+        DeclareLaunchArgument("debug_team_blue", default_value="false"),
         DeclareLaunchArgument("web_show", default_value="true"),
         DeclareLaunchArgument("draw_image", default_value="true"),
+        DeclareLaunchArgument("auto_lock_fire", default_value="false"),
+        DeclareLaunchArgument("auto_fire", default_value="true"),
+        DeclareLaunchArgument("auto_target_type", default_value="4"),
+        DeclareLaunchArgument("record_dir", default_value=""),
+        DeclareLaunchArgument("csv_strategy", default_value="new"),
+        DeclareLaunchArgument("csv_path", default_value=""),
     ]
 
     info_logs = [
         LogInfo(msg=["[shooting_table_calib] config: ", config_file]),
         LogInfo(msg=["[shooting_table_calib] output: ", output]),
+        LogInfo(msg=["[shooting_table_calib] auto_lock_fire: ", auto_lock_fire]),
+        LogInfo(msg=["[shooting_table_calib] auto_fire: ", auto_fire]),
+        LogInfo(msg=["[shooting_table_calib] auto_target_type: ", auto_target_type]),
+        LogInfo(msg=["[shooting_table_calib] record_dir: ", record_dir]),
+        LogInfo(msg=["[shooting_table_calib] csv_strategy: ", csv_strategy]),
+        LogInfo(msg=["[shooting_table_calib] csv_path: ", csv_path]),
     ]
 
     nodes = [
@@ -76,8 +97,16 @@ def generate_launch_description():
                     "detector_config.detector_path": os.path.join(detector_share, "Extras", "armor_detector_model.xml"),
                     "detector_config.car_model_path": os.path.join(detector_share, "Extras", "car_detector_model.xml"),
                     "team_red": team_red,
+                    "detector_config.debug_team_blue": debug_team_blue,
+                    "detector_config/debug_team_blue": debug_team_blue,
                     "web_show": web_show,
                     "draw_image": draw_image,
+                    "shooting_table_calib.auto_lock_fire": auto_lock_fire,
+                    "shooting_table_calib.auto_fire": auto_fire,
+                    "shooting_table_calib.auto_target_type": auto_target_type,
+                    "shooting_table_calib.record_dir": record_dir,
+                    "shooting_table_calib.csv_strategy": csv_strategy,
+                    "shooting_table_calib.csv_path": csv_path,
                 }
             ],
             on_exit=Shutdown(reason="shooting_table_calib exited"),

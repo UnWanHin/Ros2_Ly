@@ -110,7 +110,7 @@ if [[ -n "${CONFIG_FILE}" ]]; then
 fi
 
 LAUNCH_CMD=(
-  "${ROOT_DIR}/scripts/start_sentry_all.sh"
+  "${ROOT_DIR}/scripts/start/sentry_all.sh"
   "--mode" "${MODE_ARG}"
   "--no-prompt"
   "--"

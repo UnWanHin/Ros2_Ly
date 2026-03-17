@@ -1,4 +1,5 @@
 #include "../include/Application.hpp"
+#include <cmath>
 
 using namespace LangYa;
 
@@ -41,8 +42,10 @@ namespace BehaviorTree{
     void Application::SubscribeMessageAll() {
         // ly_gimbal_angles
         GenSub<ly_gimbal_angles>([](Application& app, auto msg) {
-            app.gimbalAngles.Yaw = msg->yaw; //ROS2改成小寫
-            app.gimbalAngles.Pitch = msg->pitch;
+            app.gimbalAngles = GimbalAnglesType{
+                static_cast<AngleType>(msg->yaw),
+                static_cast<AngleType>(msg->pitch)
+            }; // ROS2改成小寫
             app.hasReceivedGimbalAngles_ = true;
             app.lastGimbalAnglesRxTime = std::chrono::steady_clock::now();
         });
@@ -208,38 +211,72 @@ namespace BehaviorTree{
         // ly_predictor_target
         GenSub<ly_predictor_target>([](Application& app, auto msg) {
             auto &obj = app;
-            obj.autoAimData.Angles.Yaw = msg->yaw;
-            obj.autoAimData.Angles.Pitch = msg->pitch;
             obj.autoAimData.BuffFollow = false;
-            obj.autoAimData.FireStatus = true;
-            obj.isFindTargetAtomic = true;
-            obj.lastTargetSeenTime = std::chrono::steady_clock::now();
-            obj.LoggerPtr->Info("进入回调，更新角度");
+            obj.autoAimData.FireStatus = msg->status;
+            obj.autoAimData.Fresh = true;
+            const auto now = std::chrono::steady_clock::now();
+            if (msg->status && std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
+                obj.autoAimData.Angles = GimbalAnglesType{
+                    static_cast<AngleType>(msg->yaw),
+                    static_cast<AngleType>(msg->pitch)
+                };
+                obj.autoAimData.Valid = true;
+                obj.autoAimData.HasLatchedAngles = true;
+                obj.autoAimData.LastValidTime = now;
+                obj.isFindTargetAtomic = true;
+                obj.lastTargetSeenTime = now;
+                obj.LoggerPtr->Info("Predictor target valid, update auto-aim angles.");
+            } else {
+                obj.autoAimData.Valid = false;
+                obj.LoggerPtr->Debug("Predictor target invalid, clear auto-aim frame.");
+            }
         });
 
         // ly_buff_target
         GenSub<ly_buff_target>([](Application& app, auto msg) { 
             auto  &obj = app;
-            obj.buffAimData.Angles.Pitch = msg->pitch;
-            obj.buffAimData.Angles.Yaw = msg->yaw;
             obj.buffAimData.FireStatus = msg->status;
             obj.buffAimData.BuffFollow = true;
-            // if(obj.buffAimData.FireStatus) {
-            //     obj.isFindTargetAtomic = true;
-            // }
-            obj.isFindTargetAtomic = true;
-            obj.lastTargetSeenTime = std::chrono::steady_clock::now();
+            obj.buffAimData.Fresh = true;
+            const auto now = std::chrono::steady_clock::now();
+            if (std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
+                obj.buffAimData.Angles = GimbalAnglesType{
+                    static_cast<AngleType>(msg->yaw),
+                    static_cast<AngleType>(msg->pitch)
+                };
+                obj.buffAimData.Valid = true;
+                obj.buffAimData.HasLatchedAngles = true;
+                obj.buffAimData.LastValidTime = now;
+                // buff 模式下 status 表示“是否可开火”，不是“是否有角度跟随”
+                obj.isFindTargetAtomic = true;
+                obj.lastTargetSeenTime = now;
+            } else {
+                obj.buffAimData.Valid = false;
+                obj.LoggerPtr->Debug("Buff target invalid, clear buff frame.");
+            }
         });
 
         // ly_outpost_target
         GenSub<ly_outpost_target>([](Application& app, auto msg) {
             auto &obj = app;
-            obj.outpostAimData.Angles.Yaw = msg->yaw;
-            obj.outpostAimData.Angles.Pitch = msg->pitch;
             obj.outpostAimData.FireStatus = msg->status;
             obj.outpostAimData.BuffFollow = false;
-            obj.isFindTargetAtomic = true;
-            obj.lastTargetSeenTime = std::chrono::steady_clock::now();
+            obj.outpostAimData.Fresh = true;
+            const auto now = std::chrono::steady_clock::now();
+            if (msg->status && std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
+                obj.outpostAimData.Angles = GimbalAnglesType{
+                    static_cast<AngleType>(msg->yaw),
+                    static_cast<AngleType>(msg->pitch)
+                };
+                obj.outpostAimData.Valid = true;
+                obj.outpostAimData.HasLatchedAngles = true;
+                obj.outpostAimData.LastValidTime = now;
+                obj.isFindTargetAtomic = true;
+                obj.lastTargetSeenTime = now;
+            } else {
+                obj.outpostAimData.Valid = false;
+                obj.LoggerPtr->Debug("Outpost target invalid, clear outpost frame.");
+            }
         });
 
         // ly_enemy_hp

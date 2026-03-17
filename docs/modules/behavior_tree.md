@@ -57,15 +57,15 @@ behavior_tree/
 
 ## BT v4 依赖策略（2026-03）
 
-- `CMake` 固定從工作區 `third_party/behaviortree_cpp_v4/install` 查找 BT v4：
+- `CMake` 優先從工作區 `third_party/behaviortree_cpp_v4/install` 查找 pinned BT v4：
   - `src/behavior_tree/CMakeLists.txt:18`
-- `find_package(behaviortree_cpp ... NO_DEFAULT_PATH)`，禁用系統路徑回退：
-  - `src/behavior_tree/CMakeLists.txt:39`
+- 若 pinned 路徑不存在，則回退到系統/包管理器安裝（`AMENT_PREFIX_PATH`、`CMAKE_PREFIX_PATH`、`/opt/ros/$ROS_DISTRO`）：
+  - `src/behavior_tree/CMakeLists.txt:31`
 - 強制版本檢查 `>= 4.0.0`：
-  - `src/behavior_tree/CMakeLists.txt:44`
-- 可執行檔 RPATH 固定到 pinned BT 路徑：
-  - `src/behavior_tree/CMakeLists.txt:90`
-- `package.xml` 不再聲明 `behaviortree_cpp` 直接 `<depend>`，由 CMake pinned 路徑控制鏈接來源：
+  - `src/behavior_tree/CMakeLists.txt:65`
+- 僅在使用 pinned 副本時，為可執行檔設置對應 RPATH：
+  - `src/behavior_tree/CMakeLists.txt:112`
+- `package.xml` 聲明 `behaviortree_cpp` 依賴，便於 `rosdep` / 系統包安裝：
   - `src/behavior_tree/package.xml:1`
 
 ---
@@ -283,15 +283,15 @@ void TreeTick() {
 
 推薦啟動方式（腳本入口）：
 
-- `./scripts/start_sentry_all.sh`
+- `./scripts/start.sh gated`
   - 啟動時可選 `1/2/3`：`1=league`、`2=regional`、`3=showcase`
   - 腳本會自動對齊 `competition_profile` 與 `bt_config_file`
   - `config_file` 默認沿用 launch 默認（`detector/config/auto_aim_config.yaml`），只在顯式傳入時覆蓋
-- `./scripts/start_sentry_all.sh --mode 1 --no-prompt`
+- `./scripts/start.sh gated --mode league`
   - 非交互固定聯盟賽
-- `./scripts/start_sentry_all.sh --mode 2 --no-prompt`
+- `./scripts/start.sh gated --mode regional`
   - 非交互固定分區賽
-- `./scripts/start_sentry_all.sh --mode 3 --no-prompt`
+- `./scripts/start.sh showcase`
   - 非交互固定展示模式（regional profile + showcase 配置）
 - `./scripts/start_sentry_all_nogate.sh`
   - 調試入口：固定注入 `debug_bypass_is_start:=true`，可在無裁判 `is_start` 下聯調其他模塊

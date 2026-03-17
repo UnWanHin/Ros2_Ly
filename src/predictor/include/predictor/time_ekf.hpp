@@ -2,6 +2,8 @@
 #pragma once
 #include "ekf.hpp"
 #include "TimeStamp/TimeStamp.hpp"
+#include <algorithm>
+#include <cmath>
 #include <rclcpp/rclcpp.hpp> // [ROS 2]
 // #include <Logger/Logger.hpp> // 避免頭文件汙染導致衝突
 
@@ -21,6 +23,9 @@ class TimeEKF
     using VectorY = Eigen::Matrix<double, N_Y, 1>;
     using MatrixXX = Eigen::Matrix<double, N_X, N_X>;
     using MatrixYY = Eigen::Matrix<double, N_Y, N_Y>;
+    static constexpr double kDefaultDt = 0.015;
+    static constexpr double kMinDt = 1e-3;
+    static constexpr double kMaxDt = 0.08;
     public:
     // predict func there will not update inner state
     // which is significant different from so-called predict in EKF
@@ -28,11 +33,8 @@ class TimeEKF
     {
         VectorX X = ekf.Xe;
         VectorX Xp;
-        // [ROS 2] toSeconds -> seconds
-        stateTrans.setDt((timestamp - lastTime).seconds());
+        stateTrans.setDt(previewDt(timestamp));
         stateTrans(X, Xp);
-        // [ROS 2] Log
-        RCLCPP_INFO(ekf_log::get_logger(), "predict dt:%f", (timestamp - lastTime).seconds());
         return Xp;
     }
     VectorX predict(double dt)
@@ -55,8 +57,7 @@ class TimeEKF
     // dont check whether timestamp initialized, just take care of it by yourself 
     VectorX update(const VectorY& Y, const Time::TimeStamp& timestamp, int id)
     {
-        // [ROS 2] toSeconds -> seconds
-        stateTrans.setDt((timestamp - lastTime).seconds());
+        stateTrans.setDt(previewDt(timestamp));
         ekf.predict(stateTrans);
         lastTime = timestamp;
         measure.setMode(true);
@@ -85,12 +86,31 @@ class TimeEKF
     {
         return ekf.Xe;
     }
+    double previewDt(const Time::TimeStamp& timestamp) const
+    {
+        return sanitizeDt((timestamp - lastTime).seconds());
+    }
+    void setQ(const MatrixXX& Q)
+    {
+        ekf.Q = Q;
+    }
+    void setR(const MatrixYY& R)
+    {
+        ekf.R = R;
+    }
     void setTimeStamp(const Time::TimeStamp& timestamp)
     {
         lastTime = timestamp;
     }
         base::EKF<N_X, N_Y> ekf;
     private:
+        static double sanitizeDt(const double dt)
+        {
+            if (!std::isfinite(dt)) {
+                return kDefaultDt;
+            }
+            return std::clamp(dt, kMinDt, kMaxDt);
+        }
         stateTransFunc stateTrans;
         measureFunc measure;
         Time::TimeStamp lastTime;

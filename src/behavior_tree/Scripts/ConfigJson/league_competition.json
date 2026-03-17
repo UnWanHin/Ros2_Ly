@@ -6,7 +6,8 @@
         "StopScan": false,
         "HitBuff": false,
         "HitOutpost": false,
-        "HitCar": false
+        "HitCar": false,
+        "FireRequireTargetStatus": true
     },
     "Rate": {
         "FireRate": 20,

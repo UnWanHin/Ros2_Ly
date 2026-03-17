@@ -31,6 +31,23 @@
 #include <std_msgs/msg/u_int8.hpp>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
+// TODO check AI content
+// ROS2 核心头文件
+#include "rclcpp/rclcpp.hpp"
+
+// 标准消息与传感器消息
+#include "std_msgs/msg/header.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
+
+// CvBridge (ROS2 版本)
+#include "cv_bridge/cv_bridge.h"
+
+// 你的自定义消息 (假设包名为 auto_aim_common)
+// 注意：ROS1 的 .msg 文件在 ROS2 中生成的头文件带 .hpp 后缀，且在 msg 命名空间下
+#include "auto_aim_common/msg/armors.hpp"
+#include "auto_aim_common/msg/angle_image.hpp"
+
 #include <boost/lockfree/stack.hpp>
 #include <boost/atomic.hpp>
 
@@ -42,9 +59,6 @@
 #include <auto_aim_common/DetectionType.hpp>
 #include <VideoStreamer/VideoStreamer.hpp>
 #include "module/Camera.hpp"
-
-using namespace ly_auto_aim;
-using namespace LangYa;
 
 namespace {
 
@@ -80,21 +94,20 @@ std::atomic_bool ra_enable{false};
 std::atomic_bool outpost_enable{false};
 
 constexpr const char AppName[] = "detector";
-std::shared_ptr<ROSNode<AppName>> global_node = nullptr;
+std::shared_ptr<LangYa::ROSNode<AppName>> global_node = nullptr;
 
-CarAndArmorDetector carAndArmorDetector{};
-ArmorFilter filter{};
-ArmorRefinder finder{};
-CarFinder carFinder{};
-CameraIntrinsicsParameterPack cameraIntrinsics{};
-std::unique_ptr<PoseSolver> poseSolver{};
-Camera Cam;
+ly_auto_aim::CarAndArmorDetector carAndArmorDetector{};
+ly_auto_aim::ArmorFilter filter{};
+ly_auto_aim::ArmorRefinder finder{};
+ly_auto_aim::CarFinder carFinder{};
+ly_auto_aim::CameraIntrinsicsParameterPack cameraIntrinsics{};
+std::unique_ptr<ly_auto_aim::PoseSolver> poseSolver{};
 
-using AngleType = float;
-using Angle100Type = std::int16_t;
+LangYa::Camera Cam;
+
 struct GimbalAnglesType {
-    AngleType yaw{0.0f};
-    AngleType pitch{0.0f};
+    float yaw{0.0f};
+    float pitch{0.0f};
 }; 
 
 #pragma region image_queue
@@ -134,11 +147,11 @@ public:
 constexpr size_t MAX_STACK_SIZE = 30; 
 #pragma endregion image_stack
 
-std::atomic<AngleType> gimbal_angles_yaw;
-std::atomic<AngleType> gimbal_angles_pitch;
+std::atomic<float> gimbal_angles_yaw;
+std::atomic<float> gimbal_angles_pitch;
 
-std::atomic<ArmorType> atomic_target{};
-PNPAimResult aim_result{};
+std::atomic<ly_auto_aim::ArmorType> atomic_target{};
+ly_auto_aim::PNPAimResult aim_result{};
 
 template<typename T>
 bool TryReadParam(const std::initializer_list<const char*>& keys, T& value) {
@@ -160,7 +173,7 @@ void LoadParamCompat(const std::initializer_list<const char*>& keys, T& value, c
         global_node->declare_parameter<T>(primary, default_value);
     }
     global_node->get_parameter(primary, value);
-    roslog::warn("Parameter '{}' missing, fallback default applied.", primary);
+    roslog::error("Parameter '{}' missing, fallback default applied.", primary);
 }
 
 void LoadSolverIntrinsicsParam() {
@@ -211,38 +224,36 @@ void InitialParam(){
 }
 
 void ConfigureCamera() {
-    auto &config = Cam.Configure();
-    config.AutoExposure.Value = GX_EXPOSURE_AUTO_OFF;
-    LoadParamCompat<double>({"camera_param.ExposureTime", "camera_param/ExposureTime"}, config.ExposureTime.Value, 4000.0);
-    config.AutoGain.Value = GX_GAIN_AUTO_OFF;
-    LoadParamCompat<double>({"camera_param.Gain", "camera_param/Gain"}, config.Gain.Value, 12.0);
-    LoadParamCompat<double>({"camera_param.RedBalanceRatio", "camera_param/RedBalanceRatio"}, config.RedBalanceRatio.Value, 1.2266);
-    LoadParamCompat<double>({"camera_param.GreenBalanceRatio", "camera_param/GreenBalanceRatio"}, config.GreenBalanceRatio.Value, 1.0);
-    LoadParamCompat<double>({"camera_param.BlueBalanceRatio", "camera_param/BlueBalanceRatio"}, config.BlueBalanceRatio.Value, 1.3711);
+    Cam.Configure().AutoExposure.Value = GX_EXPOSURE_AUTO_OFF;
+    LoadParamCompat<double>({"camera_param.ExposureTime", "camera_param/ExposureTime"}, Cam.Configure().ExposureTime.Value, 4000.0);
+    Cam.Configure().AutoGain.Value = GX_GAIN_AUTO_OFF;
+    LoadParamCompat<double>({"camera_param.Gain", "camera_param/Gain"}, Cam.Configure().Gain.Value, 12.0);
+    LoadParamCompat<double>({"camera_param.RedBalanceRatio", "camera_param/RedBalanceRatio"}, Cam.Configure().RedBalanceRatio.Value, 1.2266);
+    LoadParamCompat<double>({"camera_param.GreenBalanceRatio", "camera_param/GreenBalanceRatio"}, Cam.Configure().GreenBalanceRatio.Value, 1.0);
+    LoadParamCompat<double>({"camera_param.BlueBalanceRatio", "camera_param/BlueBalanceRatio"}, Cam.Configure().BlueBalanceRatio.Value, 1.3711);
 }
 
 std::string ResolvePathFromDetectorShare(const std::string& configured_path,
                                          const std::string& detector_share_dir) {
-    namespace fs = std::filesystem;
     if (configured_path.empty()) {
         return configured_path;
     }
 
-    fs::path raw(configured_path);
-    if (fs::exists(raw)) {
-        return fs::absolute(raw).string();
+    std::filesystem::path raw(configured_path);
+    if (std::filesystem::exists(raw)) {
+        return std::filesystem::absolute(raw).string();
     }
     if (raw.is_absolute()) {
         return configured_path;
     }
 
-    const fs::path from_share = fs::path(detector_share_dir) / raw;
-    if (fs::exists(from_share)) {
+    const std::filesystem::path from_share = std::filesystem::path(detector_share_dir) / raw;
+    if (std::filesystem::exists(from_share)) {
         return from_share.string();
     }
 
-    const fs::path from_extras = fs::path(detector_share_dir) / "Extras" / raw.filename();
-    if (fs::exists(from_extras)) {
+    const std::filesystem::path from_extras = std::filesystem::path(detector_share_dir) / "Extras" / raw.filename();
+    if (std::filesystem::exists(from_extras)) {
         return from_extras.string();
     }
     return configured_path;
@@ -259,7 +270,7 @@ void gimbal_callback(const gimbal_driver::msg::GimbalAngles::ConstSharedPtr msg)
 }
 
 void get_target_callback(const std_msgs::msg::UInt8::ConstSharedPtr msg) {
-    atomic_target = static_cast<ArmorType>(msg->data);
+    atomic_target = static_cast<ly_auto_aim::ArmorType>(msg->data);
 }
 
 void aa_enable_callback(const std_msgs::msg::Bool::ConstSharedPtr &msg) {
@@ -274,9 +285,9 @@ void outpost_enable_callback(const std_msgs::msg::Bool::ConstSharedPtr &msg) {
     outpost_enable = msg->data;
 }
 
-void DrawArmor(cv::Mat &image, const ArmorObject &armor) {
-    for (const auto &point : armor.apex) {
-        cv::circle(image, point, 5, cv::Scalar(0, 0, 255), -1);
+void DrawArmor(cv::Mat &image, const ly_auto_aim::ArmorObject &armor) {
+    for (std::size_t point_index = 0; point_index < 4; ++point_index) {
+        cv::circle(image, armor.apex[point_index], 5, cv::Scalar(0, 0, 255), -1);
     }
     
     cv::line(image, armor.apex[0], armor.apex[2], cv::Scalar(255, 0, 0), 2);
@@ -287,25 +298,25 @@ void DrawArmor(cv::Mat &image, const ArmorObject &armor) {
     cv::putText(image, type_text, text_org, cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(255, 255, 255), 2);
 }
 
-void DrawCarBBox(cv::Mat& image, const CarDetection& car){
+void DrawCarBBox(cv::Mat& image, const ly_auto_aim::CarDetection& car){
     cv::rectangle(image, car.bounding_rect, cv::Scalar(0, 255, 0), 2);
 }
 
-void DrawAllArmor(cv::Mat &image, const std::vector<ArmorObject> &armors) {
-    for (const auto &armor : armors) {
-        DrawArmor(image, armor);
+void DrawAllArmor(cv::Mat &image, const std::vector<ly_auto_aim::ArmorObject> &armors) {
+    for (std::size_t armor_index = 0; armor_index < armors.size(); ++armor_index) {
+        DrawArmor(image, armors[armor_index]);
     }
 }
 
-void DrawAllCar(cv::Mat &image, const std::vector<CarDetection> &cars) {
-    for (const auto &car : cars) {
-        DrawCarBBox(image, car);
+void DrawAllCar(cv::Mat &image, const std::vector<ly_auto_aim::CarDetection> &cars) {
+    for (std::size_t car_index = 0; car_index < cars.size(); ++car_index) {
+        DrawCarBBox(image, cars[car_index]);
     }
 }
 
 struct TimedArmors {
     rclcpp::Time TimeStamp;
-    std::vector<ArmorObject> Armors;
+    std::vector<ly_auto_aim::ArmorObject> Armors;
     GimbalAnglesType TimeAngles{};
 };
 
@@ -317,17 +328,26 @@ struct AngleFrame{
 ImageQueue callbackQueue;
 void ImageLoop() {
     cv::Mat image;
+    cv::Mat sub_image;
+    cv::Mat concat_image;
     ImageQueue image_queue;
     boost::lockfree::stack<AngleFrame> angle_image_stack(MAX_STACK_SIZE);
 
     std::jthread imagepub_thread{[&] {
-        rclcpp::Rate rate(80);
+        rclcpp::WallRate rate(80); // ROS2 推荐使用 WallRate
         while (rclcpp::ok()) {
             if (!image_queue.empty()) {
                 cv::Mat publish_image = image_queue.wait_and_pop();
-                sensor_msgs::msg::CompressedImage::SharedPtr compressed_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", publish_image)
-                    .toCompressedImageMsg(cv_bridge::JPG);
-                compressed_msg->header.stamp = global_node->now(); 
+                
+                // ROS2 中消息头处理
+                std_msgs::msg::Header header;
+                header.stamp = global_node->now();
+                header.frame_id = "camera";
+
+                auto compressed_msg = cv_bridge::CvImage(header, "bgr8", publish_image)
+                                        .toCompressedImageMsg(cv_bridge::JPG);
+
+                // global_node.Publisher 映射到 ROS2 的 publish 调用
                 global_node->Publisher<ly_compressed_image>()->publish(*compressed_msg);
                 rate.sleep();
             }
@@ -335,19 +355,26 @@ void ImageLoop() {
     }};
 
     std::jthread ra_imagepub_thread{[&] {
-        rclcpp::Rate rate(100); 
+        rclcpp::WallRate rate(100); 
         while (rclcpp::ok()) {
             if (!angle_image_stack.empty()) {
                 AngleFrame angle_frame;
                 if (!angle_image_stack.pop(angle_frame)) continue;
-                sensor_msgs::msg::Image::SharedPtr image_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", angle_frame.image).toImageMsg();
-                image_msg->header.stamp = global_node->now(); 
+
+                std_msgs::msg::Header header;
+                header.stamp = global_node->now();
+
+                auto image_msg = cv_bridge::CvImage(header, "bgr8", angle_frame.image).toImageMsg();
+                
                 auto_aim_common::msg::AngleImage angle_image_msg;
                 angle_image_msg.image = *image_msg;
-                angle_image_msg.yaw = angle_frame.angles.yaw;
+                angle_image_msg.yaw = angle_frame.angles.yaw;   // 注意 ROS2 字段通常为小写
                 angle_image_msg.pitch = angle_frame.angles.pitch;
+
                 global_node->Publisher<ly_ra_angle_image>()->publish(angle_image_msg);
-                rclcpp::spin_some(global_node->get_node_base_interface());; 
+                
+                // ROS2 的 spinOnce 等价物
+                rclcpp::spin_some(global_node); 
             }
             rate.sleep();
         }
@@ -358,40 +385,29 @@ void ImageLoop() {
             rclcpp::Rate rate(78);
             while (rclcpp::ok()) {
 
-                if(web_show && !image.empty()) {
+                if(web_show && !concat_image.empty()){
+                    VideoStreamer::setFrame(concat_image);
+                } else if(web_show && !image.empty()) {
                     VideoStreamer::setFrame(image);
                 }
                 rate.sleep();
 
                 TimedArmors armors;
-                std::vector<CarDetection> cars;
-                auto_aim_common::msg::Armors armor_list_msg;
-                std::vector<ArmorObject> filtered_armors{};
-                ArmorObject target_armor;
+                std::vector<ly_auto_aim::CarDetection> cars;
+                auto_aim_common::msg::Armors armor_list_msg; // ROS2 增加 ::msg::
+                std::vector<ly_auto_aim::ArmorObject> filtered_armors{};
+                ly_auto_aim::ArmorObject target_armor;
+
                 if(!use_ros_bag){
-                    if (!Cam.GetImage(image)) {
-                        // 如果讀不到 (影片播完了)，嘗試重置
-                        if(use_video && !video_path.empty()){
-                             std::cout << "[DEBUG] Video ended. Replaying..." << std::endl;
-                             if (!Cam.Initialize(video_path)) {
-                                 std::cerr << "[ERROR] Failed to reopen video: " << video_path << std::endl;
-                                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                             }
-                        }
-                        continue; 
-                    }
-                    
-                    static int frame_cnt = 0;
-                    if (++frame_cnt % 30 == 0) {
-                        std::cout << "[DEBUG] Processing Frame: " << frame_cnt << std::endl;
-                    }
+                    if (!Cam.GetImage(image)) continue; 
                 }
-                rclcpp::spin_some(global_node->get_node_base_interface());;
+
+                rclcpp::spin_some(global_node);
+
                 if(use_ros_bag){
                     image = callbackQueue.wait_and_pop();
                 }
                 if (image.empty()) continue;
-                if(pub_image) image_queue.push(image);
 
                 if(ra_enable && !image.empty()){
                     GimbalAnglesType temp_angles{
@@ -404,11 +420,12 @@ void ImageLoop() {
                 armors.TimeAngles.yaw = gimbal_angles_yaw;
                 armors.TimeAngles.pitch = gimbal_angles_pitch;
 
-                armors.TimeStamp = global_node->now(); 
+                // ROS2 获取当前时间
+                armors.TimeStamp = global_node->now();
 
-                auto &detected_armors = armors.Armors;
-                detected_armors.clear();
-                if (!carAndArmorDetector.Detect(image, detected_armors, cars)) continue;
+                armors.Armors.clear();
+                
+                if (!carAndArmorDetector.Detect(image, armors.Armors, cars)) continue;
 
                 armor_list_msg.armors.clear();
                 armor_list_msg.cars.clear();
@@ -427,20 +444,22 @@ void ImageLoop() {
                     filter.is_team_red = true;
                 }
 
-                ArmorType target = atomic_target;
-                if (!filter.Filter(detected_armors, target, filtered_armors)) { continue; }
+                // ROS2 日志宏: RCLCPP_WARN(global_node->get_logger(), "...");
+                RCLCPP_WARN(global_node->get_logger(), "1111");
 
-                if (!poseSolver) {
-                    roslog::warn("PoseSolver not initialized, skip this frame.");
-                    continue;
-                }
+                ly_auto_aim::ArmorType target = atomic_target;
+                if (!filter.Filter(armors.Armors, target, filtered_armors)) { continue; }
+
                 if (!finder.ReFindAndSolveAll(*poseSolver, filtered_armors, target, target_armor, armor_list_msg)) {
+                    // 以前的 ROS_WARN 替换
                 }
                 if(!carFinder.FindCar(cars, armor_list_msg.cars)){
+                    RCLCPP_WARN(global_node->get_logger(), "car_finder> failed to find car");
                 }
 
                 if(draw_image) DrawAllArmor(image, filtered_armors);
                 if(draw_image) DrawAllCar(image, cars);
+                RCLCPP_WARN(global_node->get_logger(), "2222");   
 
                 if(aa_enable){
                     global_node->Publisher<ly_detector_armors>()->publish(armor_list_msg);
@@ -450,7 +469,10 @@ void ImageLoop() {
             }
         }
     };
+
+
 }
+
 
 #pragma region using image in rosbag
 void image_callback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg) {
@@ -469,12 +491,11 @@ void image_callback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
 
 void camera_benchmark(std::size_t step = 1000) {
     cv::Mat image;
-    using clock_t = std::chrono::high_resolution_clock;
-    auto begin = clock_t::now();
+    auto begin = std::chrono::high_resolution_clock::now();
     for (std::size_t i = 0;i < step; i++){
         Cam.GetImage(image);
     }
-    auto end = clock_t::now();
+    auto end = std::chrono::high_resolution_clock::now();
     auto cost = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin);
     auto avg = cost * 1.0f / step;
     roslog::info("benchmark: step({}) cost({}) avg({})", step, cost, avg);
@@ -485,7 +506,7 @@ void camera_benchmark(std::size_t step = 1000) {
 int main(int argc, char **argv) try {
     rclcpp::init(argc, argv);
 
-    global_node = std::make_shared<ROSNode<AppName>>();
+    global_node = std::make_shared<LangYa::ROSNode<AppName>>();
     std::string detector_share_dir;
     try {
         detector_share_dir = ament_index_cpp::get_package_share_directory("detector");
@@ -500,7 +521,7 @@ int main(int argc, char **argv) try {
 
     InitialParam();
     LoadSolverIntrinsicsParam();
-    poseSolver = std::make_unique<PoseSolver>(cameraIntrinsics);
+    poseSolver = std::make_unique<ly_auto_aim::PoseSolver>(cameraIntrinsics);
 
     /// 初始化节点和模块
 
