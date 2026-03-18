@@ -260,7 +260,7 @@ namespace {
             rclcpp::Time last_update_time_{};
             rclcpp::Time last_observation_time_{};
             std::atomic_bool has_tracker_input_{false};
-            const rclcpp::Duration coast_timeout_{rclcpp::Duration::from_seconds(0.4)};
+            const rclcpp::Duration coast_timeout_{rclcpp::Duration::from_seconds(0.5)};
             rclcpp::Time last_invalid_reason_log_time_{};
             const rclcpp::Duration invalid_reason_log_interval_{rclcpp::Duration::from_seconds(0.5)};
     };
