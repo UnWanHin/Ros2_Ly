@@ -25,7 +25,7 @@ Examples:
   ./${SCRIPT_NAME} --with-hz
 
   # 傳遞 launch 參數
-  ./${SCRIPT_NAME} -- --config_file:=/abs/path/auto_aim_config.yaml
+  ./${SCRIPT_NAME} -- --config_file:=/abs/path/auto_aim_config_competition.yaml
 EOF
 }
 

@@ -61,7 +61,7 @@ Examples:
   ./${SCRIPT_NAME}
   ./${SCRIPT_NAME} --latest-csv
   ./${SCRIPT_NAME} --team blue --web-show false
-  ./${SCRIPT_NAME} --config /path/to/auto_aim_config.yaml
+  ./${SCRIPT_NAME} --config /path/to/auto_aim_config_competition.yaml
   ./${SCRIPT_NAME}
   ./${SCRIPT_NAME} --fit-latest --write-config scripts/config/auto_aim_config_competition.yaml
   ./${SCRIPT_NAME} --auto-fit --write-config scripts/config/auto_aim_config_competition.yaml
@@ -310,6 +310,10 @@ if [[ -z "${CSV_STRATEGY}" ]]; then
   CSV_STRATEGY="new"
 fi
 
+if [[ -z "${CONFIG_FILE}" ]]; then
+  CONFIG_FILE="${DEFAULT_COMPETITION_CONFIG}"
+fi
+
 if [[ ! -f "${ROOT_DIR}/install/setup.bash" ]]; then
   echo "[ERROR] ${ROOT_DIR}/install/setup.bash not found. Please run colcon build first." >&2
   exit 1
@@ -365,9 +369,7 @@ echo "Starting Shooting Table Calibration System (ROS2)..."
 echo "===================================================="
 echo "[INFO] output=${OUTPUT_MODE} use_gimbal=${USE_GIMBAL} use_calib=${USE_CALIB} team_red=${TEAM_RED} debug_team_blue=${DEBUG_TEAM_BLUE} web_show=${WEB_SHOW} draw_image=${DRAW_IMAGE}"
 echo "[INFO] record_dir=${RECORD_DIR} csv_strategy=${CSV_STRATEGY} auto_fit=${AUTO_FIT}"
-if [[ -n "${CONFIG_FILE}" ]]; then
-  echo "[INFO] config_file=${CONFIG_FILE}"
-fi
+echo "[INFO] config_file=${CONFIG_FILE}"
 if [[ -n "${CSV_PATH}" ]]; then
   echo "[INFO] csv_path=${CSV_PATH}"
 fi

@@ -86,7 +86,7 @@ Examples:
   ./${SCRIPT_NAME} --mode fire --offline --angles-topic /ly/control/angles --firecode-topic /ly/control/firecode
   ./${SCRIPT_NAME} --mode mapper --publish-team true --red true
   ./${SCRIPT_NAME} --online
-  ./${SCRIPT_NAME} --online --config-file /abs/path/auto_aim_config.yaml
+  ./${SCRIPT_NAME} --online --config-file /abs/path/auto_aim_config_competition.yaml
 EOF
 }
 

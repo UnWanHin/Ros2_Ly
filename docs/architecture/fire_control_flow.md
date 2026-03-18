@@ -2,7 +2,7 @@
 
 本文档只追一条链路：
 
-- `/ly/predictor/target.status`
+- `/ly/predictor/target`
 - 如何进入 `behavior_tree`
 - 如何变成 `/ly/control/firecode`
 - 最终如何写进下位机主控制帧
@@ -14,7 +14,7 @@
 ```text
 /ly/tracker/results
   -> predictor
-  -> /ly/predictor/target.status
+  -> /ly/predictor/target
   -> behavior_tree
   -> /ly/control/firecode
   -> gimbal_driver
@@ -23,9 +23,10 @@
 
 结论先说：
 
-- `behavior_tree` 不自己做目标识别，它只消费上游给出的 `status`
+- `behavior_tree` 不自己做目标识别，它只消费上游给出的目标角
 - `gimbal_driver` 不自己判“该不该打”，它只转发火控字节
-- 当前“能不能打”主要由 `predictor/controller` 的 `ControlResult.valid` 决定
+- 当前 `autoaim/outpost` 这条链已经恢复为老逻辑：一旦 `predictor/outpost` 回调到达，`behavior_tree` 本轮就按节拍翻 firecode
+- `predictor/controller` 仍决定“要不要向 BT 发有效 target”
 
 ## 2. predictor：谁决定 `status`
 
@@ -45,21 +46,19 @@
 
 - [predictor_node.cpp](/home/unwanhin/ros2_ly_ws_sentary/src/predictor/predictor_node.cpp)
 
-### 2.2 `Target.status` 的生成
+### 2.2 `Target` 的生成
 
 当前代码里：
 
 - 有预测且可计算控制角时：
   - `target_msg.status = control_result.valid`
 - 没预测且观测也过期时：
-  - `target_msg.status = false`
-  - `target_msg.yaw = NaN`
-  - `target_msg.pitch = NaN`
+  - 不再向 `behavior_tree` 发布无效 target
 
 所以：
 
-- `status=true`：当前控制器允许开火
-- `status=false`：当前控制器不允许开火，或当前根本没有可用预测
+- `behavior_tree` 只会收到“当前可用于锁敌的 target”
+- `status=false + NaN` 不再进入 BT 主链
 
 ### 2.3 当前 `status=false` 的主要原因
 
@@ -83,14 +82,16 @@
 
 在 [SubscribeMessage.cpp](/home/unwanhin/ros2_ly_ws_sentary/src/behavior_tree/src/SubscribeMessage.cpp)：
 
-- `autoAimData.FireStatus = msg->status`
 - 消息一来就把目标置为“可锁”
-- 若 `yaw/pitch` 有限值，则刷新 `autoAimData.Angles`
+- `autoaim` 路径当前直接视为可开火
+- `outpost` 路径当前同样直接视为可开火
+- `buff` 仍保留 `msg->status` 的开火语义
 
-所以这里的语义是：
+所以这里当前的语义是：
 
 - `Angles`：跟随角
-- `FireStatus`：开火许可
+- `autoaim/outpost.FireStatus`：老链路兼容值，回调即置真
+- `buff.FireStatus`：仍由上游 status 决定
 
 ### 3.2 `PublishTogether()` 中的火控逻辑
 
@@ -102,9 +103,10 @@
 
 普通自瞄/前哨模式：
 
-- 只有 `allow_fire=true`
+- 当前已恢复为老代码语义
+- 只要这一轮收到了目标回调
 - 且 `fireRateClock.trigger()`
-- 才会执行：
+- 就会执行：
   - `RecFireCode.FlipFireStatus()`
   - `gimbalControlData.FireCode.FireStatus = RecFireCode.FireStatus`
 
@@ -112,21 +114,11 @@
 
 - 只在 `buffAimData.FireStatus=true` 时翻转
 
-### 3.3 当前 competition profile 的门控状态
+### 3.3 当前开火门控现状
 
-当前仓库里：
-
-- `regional_competition.json`
-- `league_competition.json`
-
-都把：
-
-- `AimDebug.FireRequireTargetStatus = false`
-
-也就是说：
-
-- 当前这两个 competition profile 下
-- `behavior_tree` 不再强依赖 `Target.status=true` 才允许翻 fire code
+- `AimDebug.FireRequireTargetStatus` 仍保留在配置里
+- 但对当前 `autoaim/outpost` 主链已经不是决定性门控
+- `buff` 模式仍然看 `FireStatus`
 
 ## 4. `/ly/control/firecode` 如何下发
 
@@ -161,10 +153,9 @@ msg.data = *reinterpret_cast<std::uint8_t *>(&gimbalControlData.FireCode);
 
 如果现在“没打出来”，从代码链路上更可能是：
 
-1. predictor 没生成有效 target
-2. predictor 生成了 target，但 `status=false`
-3. `behavior_tree` 进入了 `StopFire` 或模式不对
-4. 下位机对 `FireCode` 的位语义和上位机预期不一致
+1. predictor 没生成有效 target，因此根本没给 BT 回调
+2. `behavior_tree` 进入了 `StopFire` 或模式不对
+3. 下位机对 `FireCode` 的位语义和上位机预期不一致
 
 当前代码本身并没有删除或断开火控链。
 
@@ -180,8 +171,8 @@ ros2 topic echo /ly/gimbal/firecode
 
 判读方法：
 
-1. `/ly/predictor/target.status`
-   - 看 predictor 当前是否放行
+1. `/ly/predictor/target`
+   - 看 predictor 当前是否有有效 target 在发
 2. `/ly/control/firecode`
    - 看 `behavior_tree` 是否真的翻了火控字节
 3. `/ly/gimbal/firecode`

@@ -60,6 +60,7 @@ docs/
 [reports/repository_completeness_audit_2026-03-05.md](reports/repository_completeness_audit_2026-03-05.md)
 [reports/full_link_audit_2026-03-05.md](reports/full_link_audit_2026-03-05.md)
 9. 重要行为变更与调参记录
+[record/behavior_tree_bt_pinned_and_old_fire_logic_2026-03-18.md](record/behavior_tree_bt_pinned_and_old_fire_logic_2026-03-18.md)  
 [record/autoaim_follow_fire_change_2026-03-18.md](record/autoaim_follow_fire_change_2026-03-18.md)  
 [record/README.md](record/README.md)
 

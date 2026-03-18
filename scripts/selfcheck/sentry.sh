@@ -58,7 +58,7 @@ Examples:
   ./${SCRIPT_NAME} --runtime-only --launch
 
   # 自動啟動 + 自定義 launch 參數
-  ./${SCRIPT_NAME} --launch -- --config_file:=/abs/path/auto_aim_config.yaml use_buff:=false
+  ./${SCRIPT_NAME} --launch -- --config_file:=/abs/path/auto_aim_config_competition.yaml use_buff:=false
 
 Options:
   --launch               自動啟動 sentry_all.launch.py，檢查結束後自動停止
@@ -346,7 +346,7 @@ check_legacy_hardcoded_camera_sn() {
 }
 
 check_launch_mode_hints() {
-  local default_yaml="${ROOT_DIR}/src/detector/config/auto_aim_config.yaml"
+  local default_yaml="${ROOT_DIR}/scripts/config/auto_aim_config_competition.yaml"
   local cfg_arg
   cfg_arg="$(launch_arg_value "config_file" "")"
   local yaml_file="${cfg_arg:-${default_yaml}}"
@@ -649,7 +649,7 @@ if (( RUNTIME_ONLY == 0 )); then
   check_file_exists "${ROOT_DIR}/src/behavior_tree/Scripts/ConfigJson/navi_debug_competition.json"
   check_file_exists "${ROOT_DIR}/src/behavior_tree/Scripts/ConfigJson/navi_debug_points.json"
   check_file_exists "${ROOT_DIR}/src/behavior_tree/launch/sentry_all.launch.py"
-  check_file_exists "${ROOT_DIR}/src/detector/config/auto_aim_config.yaml"
+  check_file_exists "${ROOT_DIR}/scripts/config/auto_aim_config_competition.yaml"
   check_file_exists "${ROOT_DIR}/scripts/start.sh"
   check_file_exists "${ROOT_DIR}/scripts/debug.sh"
   check_file_exists "${ROOT_DIR}/scripts/selfcheck.sh"
@@ -702,7 +702,7 @@ if (( RUNTIME_ONLY == 0 )); then
   check_bash_syntax "${ROOT_DIR}/scripts/feature_test/standalone/run_standalone_menu.sh"
   check_bash_syntax "${ROOT_DIR}/scripts/feature_test/standalone/modes/navi_patrol_mode.sh"
 
-  check_camera_sn_config "${ROOT_DIR}/src/detector/config/auto_aim_config.yaml"
+  check_camera_sn_config "${ROOT_DIR}/scripts/config/auto_aim_config_competition.yaml"
   check_legacy_hardcoded_camera_sn
 
   if grep -Fq 'BTCPP_format="4"' "${ROOT_DIR}/src/behavior_tree/Scripts/main.xml"; then

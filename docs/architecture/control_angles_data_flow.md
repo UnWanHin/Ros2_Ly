@@ -160,9 +160,7 @@ Node.Publisher<ly_gimbal_angles>()->publish(msg);
 2. `predictor_node` 以固定 `10ms` timer 调 `controller->control(...)`
 3. `controller` 内部调用 `predictFunc(now + flyTime + shootDelay)` 取未来时刻目标
 4. `calcPitchYawWithShootTable(...)` 计算最终期望 yaw/pitch
-5. `Target.msg` 持续发布：
-   - 有预测时发布角度
-   - 完全失锁时发布 `status=false` 且 `yaw/pitch=NaN`
+5. `Target.msg` 固定频率计算，但只在目标有效且角度有限时才发布给 `behavior_tree`
 
 关键点：
 
@@ -181,17 +179,17 @@ Node.Publisher<ly_gimbal_angles>()->publish(msg);
 它会订阅 `/ly/predictor/target`，当前语义是：
 
 - 消息一来就把目标置为“可锁”
-- 若 `yaw/pitch` 有限值，则刷新 `autoAimData.Angles`
-- `status` 只继续作为 fire 许可写入 `FireStatus`
+- `autoaim/outpost` 当前已恢复为老代码语义：收到 target 回调即视为本轮可锁、可参与开火节拍
+- `predictor` 不再向 BT 发送无效 target，因此 BT 不再需要处理 `status=false + NaN`
 
 然后在 `PublishTogether()` 里：
 
 1. 判断当前 `aimMode`
-2. 若当前 `AimData.Valid=true`，则直接 `nextAngles = activeAimData->Angles`
-3. 若暂时没目标，但已有 latched angle，则沿用最近一次目标角
-4. 若超过扫描等待时间仍无目标，则进入扫描逻辑
+2. 若当前轮收到 target 回调，则直接 `nextAngles = activeAimData->Angles`
+3. 若当前轮没目标但距离上次锁敌未超过 2 秒，则沿用最近一次目标角
+4. 若超过 2 秒仍无目标，则进入扫描逻辑
 5. 仅在从未锁到过角时，才回退到当前云台角
-5. 最终写入 `gimbalControlData.GimbalAngles`
+6. 最终写入 `gimbalControlData.GimbalAngles`
 
 最后由 `PubGimbalControlData()` 发布 `/ly/control/angles`。
 

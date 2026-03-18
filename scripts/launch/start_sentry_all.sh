@@ -7,6 +7,7 @@ CLEANUP_EXISTING=1
 OFFLINE_MODE=0
 MODE_ARG=""
 LAUNCH_ARGS=()
+DEFAULT_CONFIG_FILE="${ROOT_DIR}/scripts/config/auto_aim_config_competition.yaml"
 
 STACK_NODE_REGEX="/(gimbal_driver_node|detector_node|tracker_solver_node|predictor_node|outpost_hitter_node|buff_hitter_node|behavior_tree_node|mapper_node|fire_flip_test)([[:space:]]|$)"
 STACK_LAUNCH_REGEX="ros2 launch behavior_tree sentry_all.launch.py"
@@ -73,6 +74,26 @@ done
 
 source_ros_workspace "${ROOT_DIR}"
 cleanup_existing_stack "${CLEANUP_EXISTING}" "${STACK_NODE_REGEX}" "${STACK_LAUNCH_REGEX}"
+
+has_config_override=0
+for arg in "${LAUNCH_ARGS[@]}"; do
+  if [[ "${arg}" == config_file:=* ]]; then
+    has_config_override=1
+    break
+  fi
+done
+
+if (( has_config_override == 0 )); then
+  LAUNCH_ARGS=("config_file:=${DEFAULT_CONFIG_FILE}" "${LAUNCH_ARGS[@]}")
+  echo "[INFO] default config_file=${DEFAULT_CONFIG_FILE}"
+else
+  for arg in "${LAUNCH_ARGS[@]}"; do
+    if [[ "${arg}" == config_file:=* ]]; then
+      echo "[INFO] override config_file=${arg#config_file:=}"
+      break
+    fi
+  done
+fi
 
 if [[ -n "${MODE_ARG}" ]]; then
   LAUNCH_ARGS=("mode:=${MODE_ARG}" "${LAUNCH_ARGS[@]}")

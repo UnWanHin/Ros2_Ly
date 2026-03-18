@@ -57,16 +57,18 @@ behavior_tree/
 
 ## BT v4 依赖策略（2026-03）
 
-- `CMake` 優先從工作區 `third_party/behaviortree_cpp_v4/install` 查找 pinned BT v4：
+- 当前默认 **强制优先使用工作区 pinned BT v4**：
+  - `third_party/behaviortree_cpp_v4/install`
   - `src/behavior_tree/CMakeLists.txt:18`
-- 若 pinned 路徑不存在，則回退到系統/包管理器安裝（`AMENT_PREFIX_PATH`、`CMAKE_PREFIX_PATH`、`/opt/ros/$ROS_DISTRO`）：
-  - `src/behavior_tree/CMakeLists.txt:31`
-- 強制版本檢查 `>= 4.0.0`：
-  - `src/behavior_tree/CMakeLists.txt:65`
-- 僅在使用 pinned 副本時，為可執行檔設置對應 RPATH：
-  - `src/behavior_tree/CMakeLists.txt:112`
-- `package.xml` 聲明 `behaviortree_cpp` 依賴，便於 `rosdep` / 系統包安裝：
-  - `src/behavior_tree/package.xml:1`
+  - `src/behavior_tree/CMakeLists.txt:21`
+- 原因：
+  - 已确认本机 `/usr/local/lib/libbehaviortree_cpp.so` 会导致 `behavior_tree_node` 在 `rclcpp::Node` 构造阶段离线段错误
+  - 工作区 pinned 副本经最小化诊断可正常和 ROS 2 `rclcpp::Node` 共存
+- 如需显式切回“系统优先，再 fallback 到工作区”，可在构建时传：
+  - `-DBTCPP_FORCE_PINNED=OFF`
+- 当前 pinned config 不导出版本字符串，因此 `force pinned` 分支只要求 config 存在，不再强依赖版本变量。
+- `package.xml` 仍保留 `behaviortree_cpp` 依赖，便于系统包安装和跨环境兼容：
+  - `src/behavior_tree/package.xml`
 
 ---
 
@@ -101,7 +103,7 @@ rclcpp::shutdown();
 | `armorList` | `array<ArmorData,10>` | `/ly/predictor/target` 等（含距離和類型） |
 | `gimbalAngles` | `GimbalAnglesType` | `/ly/gimbal/angles` |
 | `naviVelocity` | `VelocityType` | `/ly/gimbal/vel`（底盤速度反饋） |
-| `isFindTargetAtomic` | `atomic<bool>` | 消息到达时置 true，当前真正的跟随门控更依赖 `AimData.Valid/HasLatchedAngles/LastValidTime` |
+| `isFindTargetAtomic` | `atomic<bool>` | 当前已恢复为老链路语义：`predictor/outpost/buff` 回调到达即置 true，本轮直接触发锁敌与开火判定 |
 
 **決策輸出數據**：
 | 變量 | 說明 |
@@ -201,13 +203,15 @@ void TreeTick() {
 這個函數決定最終發出什麼角度和火控碼：
 
 1. **小陀螺控制**：根據血量下降速度（`healthDecreaseDetector`）和底盤速度（`naviVelocity`），動態設置 `FireCode.Rotate`（0=停止、1-3=不同速度）
-2. **有有效目標角時**：
+2. **本輪收到目標回調時**：
    - 按 `aimMode` 從對應的 `Aim*Data` 取角度
-   - 只要 `AimData.Valid=true` 就持續沿用該角，不再要求每幀都 `Fresh=true`
-   - 觸發開火（`fireRateClock` 控製開火頻率）
-3. **無目標時（超過2秒）**：切換到掃描模式，Yaw+3° 偏移，Pitch 用 `SineWave` 做俯仰波動
-4. **無目標但已有 latched angle 時**：優先沿用最近一次目標角，而不是直接回當前雲台反饋角
-4. 調用 `PublishMessageAll()` 發出最終指令
+   - `autoaim/outpost` 不再依賴 `Target.status` 來決定是否翻火控
+   - 非 `buff` 模式按 `fireRateClock` 控制翻轉开火
+3. **本輪未收到目標回調但距離上次鎖敵未超過 2 秒時**：
+   - 沿用最近一次 latched 目標角
+4. **超過2秒仍未收到目標時**：
+   - 切換到掃描模式，Yaw+3° 偏移，Pitch 用 `SineWave` 做俯仰波動
+5. 調用 `PublishMessageAll()` 發出最終指令
 
 ---
 
@@ -230,8 +234,8 @@ void TreeTick() {
 | `/ly/gimbal/angles` | `gimbalAngles` | 當前雲台角 |
 | `/ly/gimbal/posture` | `postureState` | 姿態回讀（0未知/1進攻/2防禦/3移動） |
 | `/ly/gimbal/vel` | `naviVelocity` | 底盤速度反饋 |
-| `/ly/predictor/target` | `autoAimData`, `isFindTargetAtomic` | 普通瞄準角度；消息一来即置 `Valid/HasLatchedAngles`，有限角则刷新 `Angles` |
-| `/ly/outpost/target` | `outpostAimData`, `isFindTargetAtomic` | 前哨瞄準角度 |
+| `/ly/predictor/target` | `autoAimData`, `isFindTargetAtomic` | 普通瞄準角度；当前已恢复为老链路语义：消息一到就锁，`autoaim` 侧直接视为可跟随且可开火 |
+| `/ly/outpost/target` | `outpostAimData`, `isFindTargetAtomic` | 前哨瞄準角度；当前同样按老链路语义视为可开火 |
 | `ly/buff/target` | `buffAimData`, `isFindTargetAtomic` | 打符瞄準角度 |
 | `/ly/gimbal/capV` | `capV` | 電容電壓 |
 

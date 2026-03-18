@@ -77,7 +77,7 @@ int main() {
 
 | Topic | 消息類型 | 說明 |
 |-------|----------|------|
-| `/ly/predictor/target` | `Target` | 最終瞄準角度（固定頻率發布；`status=false` 時也會發布） |
+| `/ly/predictor/target` | `Target` | 最終瞄準角度（固定頻率計算，但僅在 `status=true` 且 `yaw/pitch` 有限值時才發給 `behavior_tree`） |
 | `/ly/predictor/debug` | `DebugFilter` | 調試信息（僅在 `status=true` 且有 prediction 時發布） |
 
 #### 当前结构：订阅 update + timer publish
@@ -109,7 +109,7 @@ predictor_callback(Trackers.msg)
 └── 返回，等待 timer 發布
 ```
 
-#### `publish_timer_callback()` — 固定频率发布流程
+#### `publish_timer_callback()` — 固定频率计算、条件式发布流程
 
 ```
 publish_timer_callback()  // 10ms
@@ -118,16 +118,14 @@ publish_timer_callback()  // 10ms
 ├── has_predictions ? observation_fresh ?
 │
 ├── if 沒 prediction 且觀測已 stale:
-│   ├── status = false
-│   ├── yaw = NaN
-│   └── pitch = NaN
+│   └── 不對 BT 發 `/ly/predictor/target`
 │
 └── else:
     ├── control_result = controller->control(...)
     ├── status = control_result.valid
     ├── yaw = control_result.yaw_actual_want
     ├── pitch = control_result.pitch_actual_want
-    └── publish /ly/predictor/target
+    └── 仅在 `status=true` 且角度有限时 publish /ly/predictor/target
 ```
 
 ---
@@ -212,10 +210,10 @@ struct ControlResult {
 };
 ```
 
-当前 `predictor_node` 会持续发布 `/ly/predictor/target`：
+当前 `predictor_node` 不再向 `behavior_tree` 持续发布无效 target：
 
-- `valid=true`：表示当前允许 fire
-- `valid=false`：仍可能发布角度，或在完全失锁时发布 `NaN`
+- `valid=true`：发布 `/ly/predictor/target`
+- `valid=false`：只保留内部诊断日志，不再把 `status=false + NaN` 喂给 `behavior_tree`
 
 ---
 
@@ -242,7 +240,7 @@ PredictorNode::predictor_callback()
 PredictorNode::publish_timer_callback()  // 10ms
 ├── predictor->predict()
 ├── controller->control()
-├── publish → /ly/predictor/target
+├── publish(valid only) → /ly/predictor/target
 └── publish → /ly/predictor/debug (條件式)
 ```
 
@@ -252,5 +250,5 @@ PredictorNode::publish_timer_callback()  // 10ms
 
 - **彈速**：`atomic_bullet_speed` 默認 23.0f，但当前 `controller.cpp` 内部仍会强制回写 `23.0f`，因此更像固定弹速模型
 - **時間戳清洗**：`predictor->update()` 和 `predict()` 的時間戳都必須先轉 double 秒，否則 ROS2 不同時鐘源會異常
-- **`valid` 判斷**：当前 `status=false` 的主要原因可以通过 `predictor_node` 的节流日志看到，如 `no_predictions_and_stale`、`no_prediction` 等
+- **`valid` 判斷**：当前 `status=false` 的主要原因可以通过 `predictor_node` 的节流日志看到，如 `no_predictions_and_stale`、`no_prediction` 等；但这些无效结果不再发给 `behavior_tree`
 - **EKF發散**：當 `v_yaw`（角速度）估計發散時（小陀螺高速旋轉），可能出現瞄準角跳動，需要在 `motion_model.cpp` 調整過程噪聲 Q 矩陣

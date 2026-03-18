@@ -44,6 +44,7 @@
 推荐示例：
 
 - `autoaim_follow_fire_change_2026-03-18.md`
+- `behavior_tree_bt_pinned_and_old_fire_logic_2026-03-18.md`
 - `solver_geometry_fix_2026-03-20.md`
 - `predictor_fire_gate_adjustment_2026-03-22.md`
 

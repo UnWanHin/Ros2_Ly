@@ -20,6 +20,10 @@
 ./scripts/selfcheck.sh sentry --runtime-only --launch --wait 12 --skip-hz
 ```
 
+如果你想快速知道“姿态怎么测、`/ly/navi/goal` 怎么发、比赛主链怎么起”，先读：
+
+- `scripts/FUNCTION_GUIDE.md`
+
 ## 目录结构
 
 ```text

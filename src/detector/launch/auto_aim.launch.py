@@ -22,9 +22,16 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    # detector 包内共享配置
-    detector_share = get_package_share_directory("detector")
-    default_config_file = os.path.join(detector_share, "config", "auto_aim_config.yaml")
+    # Prefer the competition config used by the full sentry stack so detector /
+    # tracker / predictor / behavior_tree stay on one YAML by default.
+    try:
+        behavior_tree_share = get_package_share_directory("behavior_tree")
+        default_config_file = os.path.join(
+            behavior_tree_share, "config", "auto_aim_config_competition.yaml"
+        )
+    except Exception:
+        detector_share = get_package_share_directory("detector")
+        default_config_file = os.path.join(detector_share, "config", "auto_aim_config.yaml")
 
     config_file = LaunchConfiguration("config_file")
     output = LaunchConfiguration("output")
