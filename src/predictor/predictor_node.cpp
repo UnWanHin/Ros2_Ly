@@ -32,6 +32,7 @@
 #include "solver/solver.hpp"
 
 #include <atomic>
+#include <cmath>
 #include <limits>
 
 using namespace LangYa;
@@ -164,6 +165,7 @@ namespace {
 
                 auto_aim_common::msg::Target target_msg;
                 auto_aim_common::msg::DebugFilter debug_filter_msg;
+                bool publish_target = false;
                 bool publish_debug = false;
 
                 {
@@ -192,10 +194,9 @@ namespace {
                     target_msg.buff_follow = false;
 
                     if (!has_predictions && !observation_fresh) {
-                        const auto nan = std::numeric_limits<float>::quiet_NaN();
+                        // Keep the predictor's robust stale/no-prediction handling,
+                        // but do not publish invalid targets to behavior_tree.
                         target_msg.status = false;
-                        target_msg.yaw = nan;
-                        target_msg.pitch = nan;
                     } else {
                         const auto control_result =
                             controller->control(last_gimbal_angle_, target, bullet_speed);
@@ -203,28 +204,34 @@ namespace {
                         target_msg.yaw = control_result.yaw_actual_want;
                         target_msg.pitch = control_result.pitch_actual_want;
 
-                        for (const auto& prediction : predictions) {
-                            XYZ car_XYZ = prediction.center;
-                            debug_filter_msg.position.x = car_XYZ.x;
-                            debug_filter_msg.position.y = car_XYZ.y;
-                            debug_filter_msg.position.z = car_XYZ.z;
-                            debug_filter_msg.yaw = prediction.theta;
-                            debug_filter_msg.v_yaw = prediction.omega;
-                            debug_filter_msg.velocity.x = prediction.vx;
-                            debug_filter_msg.velocity.y = prediction.vy;
-                            debug_filter_msg.radius_1 = prediction.r1;
-                            debug_filter_msg.radius_2 = prediction.r2;
+                        const bool finite_target =
+                            std::isfinite(target_msg.yaw) && std::isfinite(target_msg.pitch);
+                        if (target_msg.status && finite_target) {
+                            publish_target = true;
+                            for (const auto& prediction : predictions) {
+                                XYZ car_XYZ = prediction.center;
+                                debug_filter_msg.position.x = car_XYZ.x;
+                                debug_filter_msg.position.y = car_XYZ.y;
+                                debug_filter_msg.position.z = car_XYZ.z;
+                                debug_filter_msg.yaw = prediction.theta;
+                                debug_filter_msg.v_yaw = prediction.omega;
+                                debug_filter_msg.velocity.x = prediction.vx;
+                                debug_filter_msg.velocity.y = prediction.vy;
+                                debug_filter_msg.radius_1 = prediction.r1;
+                                debug_filter_msg.radius_2 = prediction.r2;
+                            }
+                            publish_debug = has_predictions;
                         }
-                        publish_debug = target_msg.status && has_predictions;
 
-                        if (!target_msg.status && can_log_invalid_reason) {
+                        if ((!target_msg.status || !finite_target) && can_log_invalid_reason) {
                             RCLCPP_INFO(
                                 node.get_logger(),
-                                "predictor status=false reason=%s has_predictions=%s observation_fresh=%s observation_age_ms=%.1f yaw=%.2f pitch=%.2f",
+                                "predictor target suppressed reason=%s has_predictions=%s observation_fresh=%s observation_age_ms=%.1f finite_target=%s yaw=%.2f pitch=%.2f",
                                 InvalidReasonToString(control_result.invalid_reason),
                                 has_predictions ? "true" : "false",
                                 observation_fresh ? "true" : "false",
                                 observation_age_ms,
+                                finite_target ? "true" : "false",
                                 target_msg.yaw,
                                 target_msg.pitch);
                             last_invalid_reason_log_time_ = now;
@@ -241,7 +248,9 @@ namespace {
                     }
                 }
 
-                node.Publisher<ly_predictor_target>()->publish(target_msg);
+                if (publish_target) {
+                    node.Publisher<ly_predictor_target>()->publish(target_msg);
+                }
                 if (publish_debug) {
                     node.Publisher<ly_predictor_debug>()->publish(debug_filter_msg);
                 }

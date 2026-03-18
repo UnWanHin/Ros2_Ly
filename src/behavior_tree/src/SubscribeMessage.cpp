@@ -211,77 +211,57 @@ namespace BehaviorTree{
         // ly_predictor_target
         GenSub<ly_predictor_target>([](Application& app, auto msg) {
             auto &obj = app;
+            obj.autoAimData.Angles = GimbalAnglesType{
+                static_cast<AngleType>(msg->yaw),
+                static_cast<AngleType>(msg->pitch)
+            };
             obj.autoAimData.BuffFollow = false;
-            obj.autoAimData.FireStatus = msg->status;
+            // Align with ly-ros-main: predictor callback itself means "track and allow fire".
+            obj.autoAimData.FireStatus = true;
+            obj.autoAimData.Valid = true;
             obj.autoAimData.Fresh = true;
             const auto now = std::chrono::steady_clock::now();
-            // 消息一来就锁，尽量贴近老代码的“最新角优先”语义。
-            obj.autoAimData.Valid = true;
             obj.autoAimData.HasLatchedAngles = true;
             obj.autoAimData.LastValidTime = now;
             obj.isFindTargetAtomic = true;
             obj.lastTargetSeenTime = now;
-
-            if (std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
-                obj.autoAimData.Angles = GimbalAnglesType{
-                    static_cast<AngleType>(msg->yaw),
-                    static_cast<AngleType>(msg->pitch)
-                };
-                obj.LoggerPtr->Debug(
-                    "Predictor target accepted for aim, fire_status={}",
-                    msg->status);
-            } else {
-                obj.LoggerPtr->Debug(
-                    "Predictor target keeps last aim angles, fire_status={}",
-                    msg->status);
-            }
+            obj.LoggerPtr->Debug("Predictor callback latched old-style auto-aim angles.");
         });
 
         // ly_buff_target
         GenSub<ly_buff_target>([](Application& app, auto msg) { 
             auto  &obj = app;
+            obj.buffAimData.Angles = GimbalAnglesType{
+                static_cast<AngleType>(msg->yaw),
+                static_cast<AngleType>(msg->pitch)
+            };
             obj.buffAimData.FireStatus = msg->status;
             obj.buffAimData.BuffFollow = true;
+            obj.buffAimData.Valid = true;
             obj.buffAimData.Fresh = true;
             const auto now = std::chrono::steady_clock::now();
-            if (std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
-                obj.buffAimData.Angles = GimbalAnglesType{
-                    static_cast<AngleType>(msg->yaw),
-                    static_cast<AngleType>(msg->pitch)
-                };
-                obj.buffAimData.Valid = true;
-                obj.buffAimData.HasLatchedAngles = true;
-                obj.buffAimData.LastValidTime = now;
-                // buff 模式下 status 表示“是否可开火”，不是“是否有角度跟随”
-                obj.isFindTargetAtomic = true;
-                obj.lastTargetSeenTime = now;
-            } else {
-                obj.buffAimData.Valid = false;
-                obj.LoggerPtr->Debug("Buff target invalid, clear buff frame.");
-            }
+            obj.buffAimData.HasLatchedAngles = true;
+            obj.buffAimData.LastValidTime = now;
+            obj.isFindTargetAtomic = true;
+            obj.lastTargetSeenTime = now;
         });
 
         // ly_outpost_target
         GenSub<ly_outpost_target>([](Application& app, auto msg) {
             auto &obj = app;
-            obj.outpostAimData.FireStatus = msg->status;
+            obj.outpostAimData.Angles = GimbalAnglesType{
+                static_cast<AngleType>(msg->yaw),
+                static_cast<AngleType>(msg->pitch)
+            };
+            obj.outpostAimData.FireStatus = true;
             obj.outpostAimData.BuffFollow = false;
+            obj.outpostAimData.Valid = true;
             obj.outpostAimData.Fresh = true;
             const auto now = std::chrono::steady_clock::now();
-            if (std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
-                obj.outpostAimData.Angles = GimbalAnglesType{
-                    static_cast<AngleType>(msg->yaw),
-                    static_cast<AngleType>(msg->pitch)
-                };
-                obj.outpostAimData.Valid = true;
-                obj.outpostAimData.HasLatchedAngles = true;
-                obj.outpostAimData.LastValidTime = now;
-                obj.isFindTargetAtomic = true;
-                obj.lastTargetSeenTime = now;
-            } else {
-                obj.outpostAimData.Valid = false;
-                obj.LoggerPtr->Debug("Outpost target invalid, clear outpost frame.");
-            }
+            obj.outpostAimData.HasLatchedAngles = true;
+            obj.outpostAimData.LastValidTime = now;
+            obj.isFindTargetAtomic = true;
+            obj.lastTargetSeenTime = now;
         });
 
         // ly_enemy_hp

@@ -18,6 +18,7 @@ get_filename_component(BTCPP_WS_ROOT_DIR "${BTCPP_WS_SRC_DIR}" DIRECTORY)
 set(BTCPP_V4_ROOT "${BTCPP_WS_ROOT_DIR}/third_party/behaviortree_cpp_v4/install"
   CACHE PATH "Install prefix of pinned BehaviorTree.CPP v4 (defaults to <ws>/third_party/behaviortree_cpp_v4/install)")
 set(BTCPP_MIN_VERSION "4.0.0")
+option(BTCPP_FORCE_PINNED "Force behavior_tree to use the workspace-pinned BehaviorTree.CPP copy" ON)
 set(BTCPP_V4_CMAKE_DIR_SHARE "${BTCPP_V4_ROOT}/share/behaviortree_cpp/cmake")
 set(BTCPP_V4_CMAKE_DIR_LIB "${BTCPP_V4_ROOT}/lib/cmake/behaviortree_cpp")
 set(BTCPP_V4_CMAKE_PATHS "")
@@ -62,7 +63,9 @@ if(DEFINED behaviortree_cpp_DIR AND NOT behaviortree_cpp_DIR MATCHES "-NOTFOUND$
   endif()
 endif()
 
-if(BTCPP_SYSTEM_PREFIX_PATHS)
+if(BTCPP_FORCE_PINNED)
+  message(STATUS "BehaviorTree.CPP: force pinned workspace copy")
+elseif(BTCPP_SYSTEM_PREFIX_PATHS)
   find_package(behaviortree_cpp ${BTCPP_MIN_VERSION} CONFIG QUIET
     PATHS ${BTCPP_SYSTEM_PREFIX_PATHS}
     NO_DEFAULT_PATH
@@ -76,10 +79,17 @@ if(behaviortree_cpp_FOUND)
   endif()
 elseif(BTCPP_V4_CMAKE_PATHS)
   unset(behaviortree_cpp_DIR CACHE)
-  find_package(behaviortree_cpp ${BTCPP_MIN_VERSION} CONFIG REQUIRED
-    PATHS ${BTCPP_V4_CMAKE_PATHS}
-    NO_DEFAULT_PATH
-  )
+  if(BTCPP_FORCE_PINNED)
+    find_package(behaviortree_cpp CONFIG REQUIRED
+      PATHS ${BTCPP_V4_CMAKE_PATHS}
+      NO_DEFAULT_PATH
+    )
+  else()
+    find_package(behaviortree_cpp ${BTCPP_MIN_VERSION} CONFIG REQUIRED
+      PATHS ${BTCPP_V4_CMAKE_PATHS}
+      NO_DEFAULT_PATH
+    )
+  endif()
   set(BTCPP_IS_PINNED TRUE)
   message(STATUS "BehaviorTree.CPP source: pinned workspace v${BTCPP_MIN_VERSION}+ fallback")
   message(STATUS "Pinned BehaviorTree.CPP root: ${BTCPP_V4_ROOT}")
@@ -100,12 +110,18 @@ else()
     "Install the system package, or install/copy BehaviorTree.CPP v4 into ${BTCPP_V4_ROOT}.")
 endif()
 
-if(NOT DEFINED behaviortree_cpp_VERSION OR behaviortree_cpp_VERSION VERSION_LESS ${BTCPP_MIN_VERSION})
+if(NOT BTCPP_FORCE_PINNED AND (NOT DEFINED behaviortree_cpp_VERSION OR behaviortree_cpp_VERSION VERSION_LESS ${BTCPP_MIN_VERSION}))
   message(FATAL_ERROR
     "behavior_tree requires BehaviorTree.CPP v${BTCPP_MIN_VERSION}+, but found version '${behaviortree_cpp_VERSION}'.")
 endif()
 
-message(STATUS "BehaviorTree.CPP version: ${behaviortree_cpp_VERSION}")
+if(DEFINED behaviortree_cpp_VERSION AND NOT behaviortree_cpp_VERSION STREQUAL "")
+  message(STATUS "BehaviorTree.CPP version: ${behaviortree_cpp_VERSION}")
+elseif(BTCPP_FORCE_PINNED)
+  message(WARNING "BehaviorTree.CPP version string unavailable from pinned config; using validated local library at ${BTCPP_V4_ROOT}")
+else()
+  message(FATAL_ERROR "BehaviorTree.CPP version string unavailable.")
+endif()
 if(TARGET behaviortree_cpp::behaviortree_cpp)
   set(BTCPP_LINK_TARGET behaviortree_cpp::behaviortree_cpp)
 elseif(TARGET BT::behaviortree_cpp)

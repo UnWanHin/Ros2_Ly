@@ -154,29 +154,19 @@ namespace BehaviorTree {
             activeAimData = &outpostAimData;
         }
         GimbalAnglesType nextAngles = gimbalAngles;
-        const bool has_target_for_aim = activeAimData->Valid &&
-                                        (aimMode != AimMode::Buff || activeAimData->BuffFollow);
-        const bool has_fresh_target = activeAimData->Fresh && has_target_for_aim;
-        if (has_target_for_aim) {
-            bool allow_fire = activeAimData->FireStatus;
-            if (!config.AimDebugSettings.FireRequireTargetStatus) {
-                allow_fire = true;
-            }
-            LoggerPtr->Debug(
-                "Track Target, AimMode={}, Fresh={}, AllowFire={}",
-                static_cast<int>(aimMode),
-                has_fresh_target,
-                allow_fire);
+        const bool find_target = isFindTargetAtomic.load(std::memory_order_relaxed);
+        if (find_target) {
+            LoggerPtr->Debug("Find Target, AimMode={}", static_cast<int>(aimMode));
             if (!config.AimDebugSettings.StopFire){
                 if(aimMode == AimMode::Buff) { // 打符模式
-                    if(allow_fire){
+                    if(activeAimData->FireStatus){
                         /// 立刻响应不需要tick
                         RecFireCode.FlipFireStatus();
                         gimbalControlData.FireCode.FireStatus = RecFireCode.FireStatus;
                         buffAimData.FireStatus = false;
                         buff_shoot_count++;
                     }
-                } else if (allow_fire) { // 非打符模式（打前哨和打车），需允许开火
+                } else { // 非打符模式（打前哨和打车），沿用老代码：收到回调就按频率开火
                     if(fireRateClock.trigger()){
                         fireRateClock.tick();
                         RecFireCode.FlipFireStatus();
@@ -213,7 +203,7 @@ namespace BehaviorTree {
                 } else if (activeAimData->HasLatchedAngles) {
                     nextAngles = activeAimData->Angles;
                     LoggerPtr->Debug(
-                        "Reuse latest aim angles -> Pitch: {}, Yaw: {}",
+                        "Reuse latched aim angles -> Pitch: {}, Yaw: {}",
                         nextAngles.Pitch,
                         nextAngles.Yaw);
                 } else {
@@ -250,7 +240,7 @@ namespace BehaviorTree {
             gimbalControlData.FireCode.FireStatus = RecFireCode.FireStatus;
         }
         // lower_head 只在未锁目标时生效，并且整对角一起切换，避免混用旧 yaw/new pitch。
-        if(naviLowerHead && !has_target_for_aim) {
+        if(naviLowerHead && !find_target) {
             nextAngles = GimbalAnglesType{gimbalAngles.Yaw, -15.0f}; //-22.5 - 26.0
         }
         gimbalControlData.GimbalAngles = nextAngles;
