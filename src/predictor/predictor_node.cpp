@@ -48,6 +48,21 @@ namespace {
     std::atomic<ArmorType> automic_target;
     std::atomic<float> atomic_bullet_speed{23.0f};
 
+    const char* InvalidReasonToString(const ly_auto_aim::controller::ControlInvalidReason reason) {
+        using ly_auto_aim::controller::ControlInvalidReason;
+        switch (reason) {
+            case ControlInvalidReason::None: return "none";
+            case ControlInvalidReason::NoPrediction: return "no_prediction";
+            case ControlInvalidReason::InvalidCar: return "invalid_car";
+            case ControlInvalidReason::InvalidCarAfterFlyTime: return "invalid_car_after_flytime";
+            case ControlInvalidReason::NoArmorFallbackBallisticFail: return "no_armor_fallback_ballistic_fail";
+            case ControlInvalidReason::InvalidArmor: return "invalid_armor";
+            case ControlInvalidReason::ArmorBallisticFail: return "armor_ballistic_fail";
+            case ControlInvalidReason::UnstableTrack: return "unstable_track";
+            default: return "unknown";
+        }
+    }
+
     class PredictorNode {
         public:
             // 【修改 1】構造函數清空！只做最基本的 node 初始化
@@ -63,7 +78,8 @@ namespace {
                 location::Location::registerSolver(solver);
                 
                 controller->registPredictFunc([this](Time::TimeStamp timestamp) {
-                    return predictor->predict(timestamp);
+                    const double t_sec = rclcpp::Time(timestamp).seconds();
+                    return predictor->predict(Time::TimeStamp(t_sec));
                 });
 
                 node.GenSubscriber<ly_tracker_results>([this](const auto_aim_common::msg::Trackers::ConstSharedPtr msg) { 
@@ -127,7 +143,7 @@ namespace {
 
                 TrackResultPairs track_results;
                 convertMsgToTrackResults(msg, track_results, gimbal_angle);
-                double msg_time_sec = rclcpp::Time(msg->header.stamp).seconds();
+                const double msg_time_sec = rclcpp::Time(msg->header.stamp).seconds();
                 Time::TimeStamp timestamp(msg_time_sec);
 
                 std::lock_guard<std::mutex> lock(data_mutex);
@@ -154,14 +170,22 @@ namespace {
                     std::lock_guard<std::mutex> lock(data_mutex);
 
                     const auto now = node.now();
+                    const double now_sec = now.seconds();
                     const auto target = static_cast<int>(automic_target.load());
                     const auto bullet_speed = static_cast<float>(atomic_bullet_speed.load());
-                    const Time::TimeStamp timestamp = now;
+                    const Time::TimeStamp timestamp(now_sec);
                     const auto predictions = predictor->predict(timestamp);
                     const bool has_predictions = !predictions.empty();
                     const bool observation_fresh =
                         last_observation_time_.nanoseconds() != 0 &&
                         (now - last_observation_time_) <= coast_timeout_;
+                    const auto observation_age_ms =
+                        last_observation_time_.nanoseconds() == 0
+                            ? -1.0
+                            : (now - last_observation_time_).seconds() * 1000.0;
+                    const bool can_log_invalid_reason =
+                        last_invalid_reason_log_time_.nanoseconds() == 0 ||
+                        (now - last_invalid_reason_log_time_) > invalid_reason_log_interval_;
 
                     target_msg.header = last_tracker_header_;
                     target_msg.header.stamp = now;
@@ -175,7 +199,7 @@ namespace {
                     } else {
                         const auto control_result =
                             controller->control(last_gimbal_angle_, target, bullet_speed);
-                        target_msg.status = control_result.valid && observation_fresh;
+                        target_msg.status = control_result.valid;
                         target_msg.yaw = control_result.yaw_actual_want;
                         target_msg.pitch = control_result.pitch_actual_want;
 
@@ -192,6 +216,28 @@ namespace {
                             debug_filter_msg.radius_2 = prediction.r2;
                         }
                         publish_debug = target_msg.status && has_predictions;
+
+                        if (!target_msg.status && can_log_invalid_reason) {
+                            RCLCPP_INFO(
+                                node.get_logger(),
+                                "predictor status=false reason=%s has_predictions=%s observation_fresh=%s observation_age_ms=%.1f yaw=%.2f pitch=%.2f",
+                                InvalidReasonToString(control_result.invalid_reason),
+                                has_predictions ? "true" : "false",
+                                observation_fresh ? "true" : "false",
+                                observation_age_ms,
+                                target_msg.yaw,
+                                target_msg.pitch);
+                            last_invalid_reason_log_time_ = now;
+                        }
+                    }
+
+                    if (!target_msg.status && !has_predictions && !observation_fresh &&
+                        can_log_invalid_reason) {
+                        RCLCPP_INFO(
+                            node.get_logger(),
+                            "predictor status=false reason=no_predictions_and_stale has_predictions=false observation_fresh=false observation_age_ms=%.1f",
+                            observation_age_ms);
+                        last_invalid_reason_log_time_ = now;
                     }
                 }
 
@@ -214,7 +260,9 @@ namespace {
             rclcpp::Time last_update_time_{};
             rclcpp::Time last_observation_time_{};
             std::atomic_bool has_tracker_input_{false};
-            const rclcpp::Duration coast_timeout_{rclcpp::Duration::from_seconds(0.25)};
+            const rclcpp::Duration coast_timeout_{rclcpp::Duration::from_seconds(0.4)};
+            rclcpp::Time last_invalid_reason_log_time_{};
+            const rclcpp::Duration invalid_reason_log_interval_{rclcpp::Duration::from_seconds(0.5)};
     };
 }
 

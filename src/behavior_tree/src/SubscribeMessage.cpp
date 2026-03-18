@@ -215,24 +215,25 @@ namespace BehaviorTree{
             obj.autoAimData.FireStatus = msg->status;
             obj.autoAimData.Fresh = true;
             const auto now = std::chrono::steady_clock::now();
-            // 跟随和开火解耦：
-            // 只要预测角有效就允许 BT 跟随；是否开火仍然看 status。
+            // 消息一来就锁，尽量贴近老代码的“最新角优先”语义。
+            obj.autoAimData.Valid = true;
+            obj.autoAimData.HasLatchedAngles = true;
+            obj.autoAimData.LastValidTime = now;
+            obj.isFindTargetAtomic = true;
+            obj.lastTargetSeenTime = now;
+
             if (std::isfinite(msg->yaw) && std::isfinite(msg->pitch)) {
                 obj.autoAimData.Angles = GimbalAnglesType{
                     static_cast<AngleType>(msg->yaw),
                     static_cast<AngleType>(msg->pitch)
                 };
-                obj.autoAimData.Valid = true;
-                obj.autoAimData.HasLatchedAngles = true;
-                obj.autoAimData.LastValidTime = now;
-                obj.isFindTargetAtomic = true;
-                obj.lastTargetSeenTime = now;
                 obj.LoggerPtr->Debug(
                     "Predictor target accepted for aim, fire_status={}",
                     msg->status);
             } else {
-                obj.autoAimData.Valid = false;
-                obj.LoggerPtr->Debug("Predictor target invalid, clear auto-aim frame.");
+                obj.LoggerPtr->Debug(
+                    "Predictor target keeps last aim angles, fire_status={}",
+                    msg->status);
             }
         });
 

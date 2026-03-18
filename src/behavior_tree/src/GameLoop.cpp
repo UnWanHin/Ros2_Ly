@@ -154,18 +154,19 @@ namespace BehaviorTree {
             activeAimData = &outpostAimData;
         }
         GimbalAnglesType nextAngles = gimbalAngles;
-        const bool has_fresh_target = activeAimData->Fresh &&
-                                      activeAimData->Valid &&
-                                      (aimMode != AimMode::Buff || activeAimData->BuffFollow);
-        const bool hold_last_lock = (aimMode != AimMode::Buff) &&
-                                    activeAimData->HasLatchedAngles &&
-                                    (now - activeAimData->LastValidTime <= kLostTargetHold);
-        if (has_fresh_target) {
+        const bool has_target_for_aim = activeAimData->Valid &&
+                                        (aimMode != AimMode::Buff || activeAimData->BuffFollow);
+        const bool has_fresh_target = activeAimData->Fresh && has_target_for_aim;
+        if (has_target_for_aim) {
             bool allow_fire = activeAimData->FireStatus;
             if (!config.AimDebugSettings.FireRequireTargetStatus) {
                 allow_fire = true;
             }
-            LoggerPtr->Debug("Find Target, AimMode={}, AllowFire={}", static_cast<int>(aimMode), allow_fire);
+            LoggerPtr->Debug(
+                "Track Target, AimMode={}, Fresh={}, AllowFire={}",
+                static_cast<int>(aimMode),
+                has_fresh_target,
+                allow_fire);
             if (!config.AimDebugSettings.StopFire){
                 if(aimMode == AimMode::Buff) { // 打符模式
                     if(allow_fire){
@@ -191,26 +192,10 @@ namespace BehaviorTree {
                 LoggerPtr->Debug("AutoAim Angles -> Pitch: {}, Yaw: {}", autoAimData.Angles.Pitch, autoAimData.Angles.Yaw);
             }
         }
-        else if (hold_last_lock) { // 短时丢帧时沿用上一有效锁角，保持老代码的“黏锁”语义
-            gimbalControlData.FireCode.AimMode = 1;
-            gimbalControlData.FireCode.FireStatus = RecFireCode.FireStatus;
-            nextAngles = activeAimData->Angles;
-            static auto last_hold_log = std::chrono::steady_clock::time_point{};
-            if (now - last_hold_log > std::chrono::milliseconds(500)) {
-                LoggerPtr->Debug(
-                    "Hold last lock angles -> Pitch: {}, Yaw: {}",
-                    nextAngles.Pitch,
-                    nextAngles.Yaw);
-                last_hold_log = now;
-            }
-        }
         else { // 未识别到目标
             gimbalControlData.FireCode.AimMode = 0;
             if(aimMode != AimMode::Buff) {
-                /// 云台控制数据均匀变化
-                //#if false
-                //if (!config.AimDebugSettings.StopScan && now - lastFoundEnemyTime > kLostTargetHold) {
-                if (false){
+                if (!config.AimDebugSettings.StopScan && now - lastFoundEnemyTime > std::chrono::milliseconds(2000)) {
                     static auto last_searching_log = std::chrono::steady_clock::time_point{};
                     if (now - last_searching_log > std::chrono::seconds(2)) {
                         LoggerPtr->Debug("Searching Target...");
@@ -225,11 +210,19 @@ namespace BehaviorTree {
                     if (aimMode == AimMode::Outpost) {
                         nextAngles.Pitch += 15.0f;
                     }
-                } else { // 丢失目标后的短暂保持阶段，冻结当前云台反馈，不复用旧目标角
+                } else if (activeAimData->HasLatchedAngles) {
+                    nextAngles = activeAimData->Angles;
+                    LoggerPtr->Debug(
+                        "Reuse latest aim angles -> Pitch: {}, Yaw: {}",
+                        nextAngles.Pitch,
+                        nextAngles.Yaw);
+                } else {
                     nextAngles = gimbalAngles;
-                    LoggerPtr->Debug("Hold Current Gimbal -> Pitch: {}, Yaw: {}", gimbalAngles.Pitch, gimbalAngles.Yaw);
+                    LoggerPtr->Debug(
+                        "No latched aim angles yet -> Pitch: {}, Yaw: {}",
+                        gimbalAngles.Pitch,
+                        gimbalAngles.Yaw);
                 }
-                //#endif //TODO 关闭巡航
             }else { // 打符模式
                 if (now_time < 5) {
                     LoggerPtr->Info("Set Angles, Buff Mode, 10 min!");
@@ -257,7 +250,7 @@ namespace BehaviorTree {
             gimbalControlData.FireCode.FireStatus = RecFireCode.FireStatus;
         }
         // lower_head 只在未锁目标时生效，并且整对角一起切换，避免混用旧 yaw/new pitch。
-        if(naviLowerHead && !has_fresh_target && !hold_last_lock) {
+        if(naviLowerHead && !has_target_for_aim) {
             nextAngles = GimbalAnglesType{gimbalAngles.Yaw, -15.0f}; //-22.5 - 26.0
         }
         gimbalControlData.GimbalAngles = nextAngles;

@@ -7,7 +7,7 @@
         "HitBuff": false,
         "HitOutpost": false,
         "HitCar": false,
-        "FireRequireTargetStatus": true
+        "FireRequireTargetStatus": false
     },
     "Rate": {
         "FireRate": 20,

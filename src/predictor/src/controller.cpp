@@ -225,6 +225,7 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
     result.yaw_actual_want = gimbal_angle.yaw;
     result.valid = false;
     result.shoot_flag = false;
+    result.invalid_reason = ControlInvalidReason::None;
 
     // [ROS 2] 時間適配
     if (!global_controller_node) return result;
@@ -233,6 +234,7 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
     Predictions predictions_for_time = predictFunc(now + flyTime + shootDelay);
     if (predictions_for_time.empty())
     {
+        result.invalid_reason = ControlInvalidReason::NoPrediction;
         roslog::debug("No prediction");
         return result;
     }
@@ -270,6 +272,7 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
         [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
     if (it == predictions_for_time.end())
     {
+        result.invalid_reason = ControlInvalidReason::InvalidCar;
         roslog::debug("New car id invalid(shouldn't happen)");
         return result;
     }
@@ -293,6 +296,7 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
         [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
     if (it == predictions_for_time.end())
     {
+        result.invalid_reason = ControlInvalidReason::InvalidCarAfterFlyTime;
         roslog::debug("New car id invalid after flytime update");
         return result;
     }
@@ -330,6 +334,7 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
                                                      it->center.z + z_offset);
             if (!success)
             {
+                result.invalid_reason = ControlInvalidReason::NoArmorFallbackBallisticFail;
                 roslog::warn("calcPitchYawWithShootTable failed");
                 return result;
             }
@@ -349,6 +354,7 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
         [&](const auto& armor) { return armor.id == aim_armor_id.second; });
     if (armor_it == it->armors.end())
     {
+        result.invalid_reason = ControlInvalidReason::InvalidArmor;
         roslog::debug("Invalid armor id (shoudln't happen)");
         return result;
     }
@@ -360,6 +366,7 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
     // 使用带射击表补偿的弹道计算
     if (!calcPitchYawWithShootTable(pitch, yaw, time, armor_it->center.x, armor_it->center.y, armor_it->center.z))
     {
+        result.invalid_reason = ControlInvalidReason::ArmorBallisticFail;
         roslog::warn("calcPitchYawWithShootTable failed");
         return result;
     }
@@ -372,15 +379,16 @@ ControlResult Controller::control(const GimbalAngleType& gimbal_angle, int targe
     float yaw_diff = std::remainder(result.yaw_actual_want - gimbal_angle.yaw, 360.0f);
     const bool unstable_track = !it->stable;
     if (unstable_track) {
-        result.valid = false;
         roslog::debug(
-            "Control invalid: car_id={}, armor_id={}, stable={}, yaw_diff_deg={}",
+            "Control degraded but allowed: car_id={}, armor_id={}, stable={}, yaw_diff_deg={}",
             aim_armor_id.first, aim_armor_id.second, it->stable, yaw_diff);
     } else {
+        result.invalid_reason = ControlInvalidReason::None;
         roslog::debug(
             "Control valid: car_id={}, armor_id={}, yaw_diff_deg={}",
             aim_armor_id.first, aim_armor_id.second, yaw_diff);
     }
+    result.invalid_reason = ControlInvalidReason::None;
     if(result.pitch_setpoint < -2.0f ) result.pitch_actual_want -= 1.0f; /// 高打低偏置补丁
 
     return result;
