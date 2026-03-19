@@ -38,6 +38,11 @@ using namespace LangYa;
 
 namespace
 {
+    constexpr std::uint16_t ByteSwap16(const std::uint16_t value) noexcept
+    {
+        return static_cast<std::uint16_t>((value >> 8) | (value << 8));
+    }
+
     LY_DEF_ROS_TOPIC(ly_control_angles, "/ly/control/angles", gimbal_driver::msg::GimbalAngles);
     LY_DEF_ROS_TOPIC(ly_control_firecode, "/ly/control/firecode", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_control_vel, "/ly/control/vel", gimbal_driver::msg::Vel);
@@ -293,7 +298,8 @@ namespace
                 msg.gamecode = *reinterpret_cast<const std::uint16_t*>(&data.GameCode);
                 msg.ammoleft = data.AmmoLeft;
                 msg.timeleft = data.TimeLeft;
-                msg.selfhealth = data.SelfHealth;
+                // Current lower-computer payload reports SelfHealth with swapped byte order.
+                msg.selfhealth = ByteSwap16(data.SelfHealth);
                 msg.exteventdata = *static_cast<const std::uint32_t*>(&data.ExtEventData);
                 Node.Publisher<topic>()->publish(msg);
             }
