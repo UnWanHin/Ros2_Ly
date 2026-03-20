@@ -158,7 +158,11 @@ scripts/
 | `scripts/debug/ballistic_error_log.sh` | 过滤弹道/锁敌日志 | `scripts/tools/monitor_ballistic_errors.sh` |
 | `scripts/debug/shooting_table_calib.sh` | 射表标定 | `scripts/launch/start_shooting_table_calib.sh` |
 | `scripts/debug/shooting_table_autoaim.sh` | 射表直连 autoaim 验证 | `scripts/launch/start_shooting_table_autoaim.sh` |
+| `scripts/debug/control_angles_test.sh` | 直接发 `/ly/control/angles` 角度命令 | 脚本内置发布逻辑 |
 | `scripts/debug/chassis_gyro.sh` | 小陀螺/Rotate 链路测试 | `scripts/feature_test/standalone/modes/chassis_spin_mode.sh` |
+| `scripts/debug/chassis_spin_translate.sh` | 小陀螺 + 底盘速度联动测试 | `scripts/feature_test/standalone/modes/chassis_spin_translate_mode.sh` |
+| `scripts/debug/rotate_level_test.sh` | Rotate 档位循环与回读测试 | 脚本内置发布/回读逻辑 |
+| `scripts/debug/posture_test.sh` | 姿态切换循环与回读测试 | 脚本内置发布/回读逻辑 |
 
 ### Selfcheck
 
@@ -200,7 +204,11 @@ scripts/
 8. `ballistic-log`
 9. `shooting-table-calib`
 10. `shooting-table-autoaim`
-11. `chassis-gyro`
+11. `control-angles-test`
+12. `chassis-gyro`
+13. `chassis-gyro-translate`
+14. `rotate-level-test`
+15. `posture-test`
 
 ### `./scripts/selfcheck.sh`
 

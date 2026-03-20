@@ -80,19 +80,19 @@
 默认只拉 `behavior_tree`：
 
 ```bash
-./scripts/start_sentry_navi_debug.sh
+./scripts/debug.sh navi-debug
 ```
 
 如果现场接了裁判系统，想保留开赛门控：
 
 ```bash
-./scripts/start_sentry_navi_debug.sh --with-gate
+./scripts/debug.sh navi-debug --with-gate
 ```
 
 如果还想顺手带上 `gimbal_driver`：
 
 ```bash
-./scripts/start_sentry_navi_debug.sh -- use_gimbal:=true
+./scripts/debug.sh navi-debug -- use_gimbal:=true
 ```
 
 ---
@@ -114,4 +114,4 @@
 - 这套方案只改“发哪些点位 ID”，不改导航侧坐标定义。
 - 如果你现场要的是全新 XY 临时坐标，那还得让导航侧支持新的坐标表，或改回 `/ly/navi/goal_pos`。
 - `./scripts/debug.sh navi-patrol` 直接读取 `src/behavior_tree/Scripts/ConfigJson/navi_debug_points.json`。
-- `./scripts/start_sentry_navi_debug.sh` 里的 `behavior_tree` 运行时读取的是 `install/behavior_tree/share/behavior_tree/Scripts/ConfigJson/*.json`，所以改完源文件后要先 `colcon build --packages-select behavior_tree`。
+- `./scripts/debug.sh navi-debug` 里的 `behavior_tree` 运行时读取的是 `install/behavior_tree/share/behavior_tree/Scripts/ConfigJson/*.json`，所以改完源文件后要先 `colcon build --packages-select behavior_tree`。

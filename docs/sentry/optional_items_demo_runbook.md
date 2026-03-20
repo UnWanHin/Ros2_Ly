@@ -68,7 +68,7 @@
 先只展示识别与可视化：
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode perception --online
+./scripts/debug.sh autoaim-debug --mode perception --online
 ```
 
 浏览器打开：
@@ -80,13 +80,13 @@ http://localhost:8001/stream
 确认识别框、目标切换、预测输出正常后，停掉上面的感知-only 链路，再启动完整自瞄：
 
 ```bash
-./scripts/start_autoaim_test.sh --online
+./scripts/debug.sh autoaim-test --online
 ```
 
 如果你要求“必须挂在裁判开赛门控后再接管控制”，不要用 standalone，自瞄和姿态一起走：
 
 ```bash
-./scripts/start_sentry_showcase.sh --with-gate -- use_buff:=false use_outpost:=false
+./scripts/start.sh showcase --with-gate -- use_buff:=false use_outpost:=false
 ```
 
 ### 3.3 50 发怎么执行
@@ -117,13 +117,13 @@ ros2 topic echo /ly/me/ammo_left
 推荐按这个节奏做：
 
 1. 启动识别-only：
-   `./scripts/start_autoaim_debug.sh --mode perception --online`
+   `./scripts/debug.sh autoaim-debug --mode perception --online`
 2. 打开浏览器展示可视化流：
    `http://localhost:8001/stream`
 3. 让目标模块沿 `B` 线运动、自转，展示识别框和目标切换
 4. 停掉 perception-only
 5. 启动完整自瞄：
-   `./scripts/start_autoaim_test.sh --online`
+   `./scripts/debug.sh autoaim-test --online`
 6. 装弹 `50` 发，记录开始弹量
 7. 开始 1 分钟计时并击打目标
 8. 结束后记录剩余弹量、目标模块前后血量差、现场录像
@@ -158,13 +158,13 @@ ros2 topic echo /ly/me/ammo_left
 内部调试、不等门控：
 
 ```bash
-./scripts/start_sentry_showcase.sh
+./scripts/start.sh showcase
 ```
 
 如果现场接裁判系统，建议正式展示时保留门控：
 
 ```bash
-./scripts/start_sentry_showcase.sh --with-gate -- use_buff:=false use_outpost:=false
+./scripts/start.sh showcase --with-gate -- use_buff:=false use_outpost:=false
 ```
 
 ### 4.2 当前展示逻辑
@@ -251,19 +251,19 @@ colcon build --packages-select behavior_tree
 如果导航侧已经在线，只想发临时巡逻点：
 
 ```bash
-./scripts/start_navi_patrol_test.sh --plan test_site_sequence
+./scripts/debug.sh navi-patrol --plan test_site_sequence
 ```
 
 如果你想用 `behavior_tree` 这条链保持发点：
 
 ```bash
-./scripts/start_sentry_navi_debug.sh
+./scripts/debug.sh navi-debug
 ```
 
 如果现场接裁判系统，保留门控：
 
 ```bash
-./scripts/start_sentry_navi_debug.sh --with-gate
+./scripts/debug.sh navi-debug --with-gate
 ```
 
 ### 5.3 临时路线改哪里
@@ -306,7 +306,7 @@ colcon build --packages-select behavior_tree
 
 - 改完 JSON 不用 build
 
-如果你跑 `start_sentry_navi_debug.sh`：
+如果你跑 `./scripts/debug.sh navi-debug`：
 
 - 改完后要先：
 
@@ -342,37 +342,37 @@ colcon build --packages-select behavior_tree
 项目一，只看识别可视化：
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode perception --online
+./scripts/debug.sh autoaim-debug --mode perception --online
 ```
 
 项目一，完整自瞄击打：
 
 ```bash
-./scripts/start_autoaim_test.sh --online
+./scripts/debug.sh autoaim-test --online
 ```
 
 项目二，姿态展示：
 
 ```bash
-./scripts/start_sentry_showcase.sh
+./scripts/start.sh showcase
 ```
 
 项目二，带裁判门控的姿态展示：
 
 ```bash
-./scripts/start_sentry_showcase.sh --with-gate -- use_buff:=false use_outpost:=false
+./scripts/start.sh showcase --with-gate -- use_buff:=false use_outpost:=false
 ```
 
 项目三，单独导航巡逻：
 
 ```bash
-./scripts/start_navi_patrol_test.sh --plan test_site_sequence
+./scripts/debug.sh navi-patrol --plan test_site_sequence
 ```
 
 项目三，BT 导航调试模式：
 
 ```bash
-./scripts/start_sentry_navi_debug.sh
+./scripts/debug.sh navi-debug
 ```
 
 ---

@@ -30,7 +30,7 @@
 默认行为：
 
 - 固定 `--mode 3 --no-prompt`
-- 默认走 `start_sentry_all_nogate.sh`
+- 默认走 `showcase.launch.py`，并注入 `debug_bypass_is_start:=true`
 - 自动注入展示配置 `Scripts/ConfigJson/showcase_competition.json`
 
 如果现场已经接裁判系统，想保留开赛门控：
@@ -68,7 +68,7 @@
 这条命令实际等价于：
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode fire --offline
+./scripts/debug.sh autoaim-debug --mode fire --offline
 ```
 
 它会拉起：
@@ -98,7 +98,7 @@
 ### 3.1 只看识别和可视化，不接管控制
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode perception --online
+./scripts/debug.sh autoaim-debug --mode perception --online
 ```
 
 用途：
@@ -118,7 +118,7 @@
 或：
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode fire --online
+./scripts/debug.sh autoaim-debug --mode fire --online
 ```
 
 用途：
@@ -131,7 +131,7 @@
 ### 3.3 已经有感知链，只想单独起 mapper
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode mapper --online
+./scripts/debug.sh autoaim-debug --mode mapper --online
 ```
 
 适合拆链调试，不是现场优先方案。
@@ -187,7 +187,7 @@
 - 有展示巡逻
 - 默认配置下会直接进入展示巡逻，不依赖裁判回血/弹药回传
 - 小陀螺不属于“独立强制常开模式”，是否输出 Rotate 仍由 `behavior_tree` 当前逻辑决定
-- 如果你只想单独测小陀螺，请改用 `./scripts/start_chassis_gyro_test.sh`
+- 如果你只想单独测小陀螺，请改用 `./scripts/debug.sh chassis-gyro`
 
 点位 ID 对照：
 
@@ -284,7 +284,7 @@
 推荐命令：
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode perception --online
+./scripts/debug.sh autoaim-debug --mode perception --online
 ```
 
 如果还要直接控云台：

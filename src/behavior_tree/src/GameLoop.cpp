@@ -138,10 +138,10 @@ namespace BehaviorTree {
                 const auto* pattern = rotate_pattern_flip ? kRotatePatternA : kRotatePatternB;
                 gimbalControlData.FireCode.Rotate = pattern[phase];
             } else {
-                gimbalControlData.FireCode.Rotate = 3;
+                gimbalControlData.FireCode.Rotate = 1;
             }
         } else {
-            gimbalControlData.FireCode.Rotate = 3;
+            gimbalControlData.FireCode.Rotate = 1;
         }
         if (config.AimDebugSettings.StopRotate) gimbalControlData.FireCode.Rotate = 0;
 
@@ -208,7 +208,7 @@ namespace BehaviorTree {
                     }
                     const auto current_time = std::chrono::steady_clock::now();
                     nextAngles = GimbalAnglesType{
-                        static_cast<AngleType>(gimbalAngles.Yaw + 4 * delta_yaw),
+                        static_cast<AngleType>(gimbalAngles.Yaw + 8 * delta_yaw),
                         AngleType{-0.0f + pitch_wave.Produce(current_time) * 3.0f}
                     };
 

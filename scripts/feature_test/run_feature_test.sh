@@ -292,7 +292,7 @@ fi
 
 if (( CFG_RUN_GIMBAL == 1 )) && (( CFG_GIMBAL_MODE_ARMOR == 1 )); then
   gimbal_cmd=(
-    "${ROOT_DIR}/scripts/start_autoaim_debug.sh"
+    "${ROOT_DIR}/scripts/launch/start_autoaim_debug.sh"
     --mode fire
     --wait "${CFG_GLOBAL_WAIT_STACK_SEC}"
     --cmd-timeout "${CFG_GLOBAL_CMD_TIMEOUT_SEC}"

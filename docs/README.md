@@ -33,7 +33,12 @@ docs/
 [modules/detector.md](modules/detector.md)  
 [modules/tracker_solver.md](modules/tracker_solver.md)  
 [modules/predictor.md](modules/predictor.md)  
-[modules/behavior_tree.md](modules/behavior_tree.md)
+[modules/behavior_tree.md](modules/behavior_tree.md)  
+补充模块文档  
+[modules/outpost_hitter.md](modules/outpost_hitter.md)  
+[modules/buff_hitter.md](modules/buff_hitter.md)  
+[modules/shooting_table_calib.md](modules/shooting_table_calib.md)  
+[modules/auto_aim_common.md](modules/auto_aim_common.md)
 6. 哨兵专项（2026 姿态机制）
 [sentry/decision_runtime_behavior.md](sentry/decision_runtime_behavior.md)  
 [sentry/sentry_decision_autoaim_manual.md](sentry/sentry_decision_autoaim_manual.md)  

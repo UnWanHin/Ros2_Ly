@@ -289,16 +289,16 @@ void TreeTick() {
 推薦啟動方式（腳本入口）：
 
 - `./scripts/start.sh gated`
-  - 啟動時可選 `1/2/3`：`1=league`、`2=regional`、`3=showcase`
+  - 啟動時會交互選擇 `league/regional`（或直接傳 `--mode`）
   - 腳本會自動對齊 `competition_profile` 與 `bt_config_file`
-  - `config_file` 默認沿用 launch 默認（`detector/config/auto_aim_config.yaml`），只在顯式傳入時覆蓋
+  - `config_file` 默認注入 `scripts/config/auto_aim_config_competition.yaml`，只在顯式傳入時覆蓋
 - `./scripts/start.sh gated --mode league`
   - 非交互固定聯盟賽
 - `./scripts/start.sh gated --mode regional`
   - 非交互固定分區賽
 - `./scripts/start.sh showcase`
   - 非交互固定展示模式（regional profile + showcase 配置）
-- `./scripts/start_sentry_all_nogate.sh`
+- `./scripts/start.sh nogate --mode regional`
   - 調試入口：固定注入 `debug_bypass_is_start:=true`，可在無裁判 `is_start` 下聯調其他模塊
 
 ### 聯盟賽決策（當前實作）

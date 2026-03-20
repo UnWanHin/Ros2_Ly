@@ -92,7 +92,7 @@
 - 新增兩個可選調試參數（默認關閉，不影響比賽路徑）：
   - `debug_bypass_is_start:=true`：直接跳過 `is_start` 門控
   - `wait_for_game_start_timeout_sec:=N`：等待 N 秒後跳過門控
-- 便捷腳本：`./scripts/start_sentry_all_nogate.sh`（固定注入 `debug_bypass_is_start:=true`）
+- 便捷入口：`./scripts/start.sh nogate --mode regional`（固定注入 `debug_bypass_is_start:=true`）
 - `Application::CheckDebug()` 只覆蓋 `AimMode`（例如強制 Buff / Outpost），不會跳過開賽等待。
 - `detector_config.debug_mode/debug_team_blue` 只影響 detector 的敵我顏色過濾，不是全鏈路總開關。
 - 離車環境無穩定裁判數據時，建議使用 `detector + mapper_node` 做火控聯調。
@@ -150,7 +150,7 @@ BT 節點實際調用的就是這些函數。
 - 直接 `ros2 launch behavior_tree sentry_all.launch.py`：
   - 默認讀 `src/detector/config/auto_aim_config.yaml`
 - `./scripts/start.sh gated`：
-  - 默認沿用 launch 默認 YAML（`detector/config/auto_aim_config.yaml`）
+  - 默認注入 `scripts/config/auto_aim_config_competition.yaml`
   - 僅注入模式相關參數（`competition_profile` / `bt_config_file` / `offline`）
   - 需要時可手動傳 `config_file:=...` 覆蓋
 

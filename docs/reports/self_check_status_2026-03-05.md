@@ -3,9 +3,9 @@
 ## 执行命令
 
 ```bash
-./scripts/self_check_pc.sh
-./scripts/self_check_sentry.sh --static-only --skip-hz
-./scripts/self_check_sentry.sh --runtime-only --launch --wait 12 --skip-hz
+./scripts/selfcheck.sh pc
+./scripts/selfcheck.sh sentry --static-only --skip-hz
+./scripts/selfcheck.sh sentry --runtime-only --launch --wait 12 --skip-hz
 source /opt/ros/humble/setup.bash && source install/setup.bash
 colcon test --packages-select behavior_tree buff_hitter outpost_hitter
 colcon test-result --verbose
@@ -13,12 +13,12 @@ colcon test-result --verbose
 
 ## 结果摘要
 
-- `self_check_pc.sh`：通过  
+- `selfcheck.sh pc`：通过  
   - 9 个包构建完成。  
   - 静态契约检查 `PASS=19, FAIL=0`。
-- `self_check_sentry.sh --static-only`：通过  
+- `selfcheck.sh sentry --static-only`：通过  
   - 文件、BT XML、camera_sn 双键一致性检查全部通过。
-- `self_check_sentry.sh --runtime-only --launch`：失败（宿主权限环境复测）  
+- `selfcheck.sh sentry --runtime-only --launch`：失败（宿主权限环境复测）  
   - ROS2 图可建立，在线节点：`/gimbal_driver`、`/tracker_solver`、`/predictor_node`、`/outpost_hitter`。  
   - 缺失节点：`/detector`、`/buff_hitter`、`/behavior_tree`。  
   - `Launch Diagnosis` 关键签名：
@@ -41,7 +41,7 @@ colcon test-result --verbose
 ## 建议复测命令（宿主机/车端）
 
 ```bash
-./scripts/self_check_robot.sh
+./scripts/selfcheck.sh robot
 # 或
-./scripts/self_check_sentry.sh --runtime-only --launch --wait 12 --skip-hz
+./scripts/selfcheck.sh sentry --runtime-only --launch --wait 12 --skip-hz
 ```

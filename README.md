@@ -15,6 +15,11 @@
 [`docs/modules/tracker_solver.md`](docs/modules/tracker_solver.md)  
 [`docs/modules/predictor.md`](docs/modules/predictor.md)  
 [`docs/modules/behavior_tree.md`](docs/modules/behavior_tree.md)
+补充模块（按需查阅）  
+[`docs/modules/outpost_hitter.md`](docs/modules/outpost_hitter.md)  
+[`docs/modules/buff_hitter.md`](docs/modules/buff_hitter.md)  
+[`docs/modules/shooting_table_calib.md`](docs/modules/shooting_table_calib.md)  
+[`docs/modules/auto_aim_common.md`](docs/modules/auto_aim_common.md)
 4. 哨兵决策与姿态（2026 重点）  
 [`docs/sentry/sentry_decision_autoaim_manual.md`](docs/sentry/sentry_decision_autoaim_manual.md)  
 [`docs/sentry/sentry_posture_system.md`](docs/sentry/sentry_posture_system.md)  

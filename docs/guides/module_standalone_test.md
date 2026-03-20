@@ -53,13 +53,13 @@ ros2 run detector mapper_node \
 可直接使用脚本一键拉起（默认 `fire` 模式）：
 
 ```bash
-./scripts/start_autoaim_debug.sh
+./scripts/debug.sh autoaim-debug
 ```
 
 仅感知链（不控火）：
 
 ```bash
-./scripts/start_autoaim_debug.sh --mode perception
+./scripts/debug.sh autoaim-debug --mode perception
 ```
 
 ### E) BT 外配置化功能测试（单控制源）

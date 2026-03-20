@@ -57,5 +57,5 @@ if (( HAS_NET_MODE == 0 )); then
 fi
 
 cd "${ROOT_DIR}"
-"${ROOT_DIR}/scripts/start_autoaim_debug.sh" --mode fire "${ARGS[@]}"
+"${ROOT_DIR}/scripts/launch/start_autoaim_debug.sh" --mode fire "${ARGS[@]}"
 exit $?
