@@ -861,6 +861,18 @@ namespace BehaviorTree {
         if (IsLeagueProfile()) {
             const auto& league = config.LeagueStrategySettings;
             const auto now = std::chrono::steady_clock::now();
+            const std::uint16_t recovery_exit_min = league.HealthRecoveryExitMin;
+            const std::uint16_t recovery_exit_preferred = league.HealthRecoveryExitPreferred;
+            const auto recovery_exit_stable = std::chrono::seconds(league.HealthRecoveryExitStableSec);
+            const auto recovery_max_hold = std::chrono::seconds(league.HealthRecoveryMaxHoldSec);
+            const auto recovery_cooldown = std::chrono::seconds(league.HealthRecoveryCooldownSec);
+            auto reset_league_recovery_state = [&]() {
+                leagueRecoveryActive_ = false;
+                leagueRecoveryStartTime_ = std::chrono::steady_clock::time_point{};
+                leagueRecoveryReach350Time_ = std::chrono::steady_clock::time_point{};
+                leagueRecoveryEntryHealth_ = 0;
+                leagueRecoveryPeakHealth_ = 0;
+            };
             auto is_referee_value_ready = [&](const bool has_received,
                                               const std::chrono::steady_clock::time_point& last_rx_time) {
                 if (!has_received) {
@@ -885,6 +897,10 @@ namespace BehaviorTree {
                 ammoLeft <= league.AmmoRecoveryThreshold;
             const bool missing_health_input = league.UseHealthRecovery && !health_ready;
             const bool missing_ammo_input = league.UseAmmoRecovery && !ammo_ready;
+            const bool health_recovery_cooldown_active =
+                leagueRecoveryCooldownUntil_.time_since_epoch().count() != 0 &&
+                now < leagueRecoveryCooldownUntil_;
+            const bool effective_health_low = health_low && !health_recovery_cooldown_active;
 
             if ((missing_health_input || missing_ammo_input) &&
                 (now - lastLeagueRecoveryGuardLogTime_ > std::chrono::seconds(2))) {
@@ -895,14 +911,84 @@ namespace BehaviorTree {
                     leagueRefereeStaleTimeoutMs_);
                 lastLeagueRecoveryGuardLogTime_ = now;
             }
+            if (health_recovery_cooldown_active &&
+                (now - lastLeagueRecoveryGuardLogTime_ > std::chrono::seconds(2))) {
+                const auto cooldown_left_sec = std::chrono::duration_cast<std::chrono::seconds>(
+                    leagueRecoveryCooldownUntil_ - now).count();
+                LoggerPtr->Warning(
+                    "League recovery cooldown active: skip health-triggered Recovery for {}s.",
+                    cooldown_left_sec > 0 ? cooldown_left_sec : 0);
+                lastLeagueRecoveryGuardLogTime_ = now;
+            }
 
-            if (naviCommandGoal == recovery_goal_id &&
-                (health_low || ammo_low || missing_health_input || missing_ammo_input)) {
+            if (effective_health_low && !leagueRecoveryActive_) {
+                leagueRecoveryActive_ = true;
+                leagueRecoveryStartTime_ = now;
+                leagueRecoveryReach350Time_ = std::chrono::steady_clock::time_point{};
+                leagueRecoveryEntryHealth_ = myselfHealth;
+                leagueRecoveryPeakHealth_ = myselfHealth;
+                LoggerPtr->Info(
+                    "League health recovery activated: hp={} < threshold={}",
+                    myselfHealth,
+                    league.HealthRecoveryThreshold);
+            }
+
+            if (leagueRecoveryActive_) {
+                if (health_ready && myselfHealth > leagueRecoveryPeakHealth_) {
+                    leagueRecoveryPeakHealth_ = myselfHealth;
+                }
+
+                if (health_ready && myselfHealth >= recovery_exit_min) {
+                    if (leagueRecoveryReach350Time_.time_since_epoch().count() == 0) {
+                        leagueRecoveryReach350Time_ = now;
+                    }
+                } else {
+                    leagueRecoveryReach350Time_ = std::chrono::steady_clock::time_point{};
+                }
+
+                const bool reach_preferred =
+                    health_ready && myselfHealth >= recovery_exit_preferred;
+                const bool reach_min_stable =
+                    health_ready &&
+                    myselfHealth >= recovery_exit_min &&
+                    leagueRecoveryReach350Time_.time_since_epoch().count() != 0 &&
+                    (now - leagueRecoveryReach350Time_) >= recovery_exit_stable;
+                const bool recovery_timeout =
+                    leagueRecoveryStartTime_.time_since_epoch().count() != 0 &&
+                    (now - leagueRecoveryStartTime_) >= recovery_max_hold;
+
+                if (reach_preferred || reach_min_stable) {
+                    LoggerPtr->Info(
+                        "League health recovery completed: hp={} (peak={}), return to normal strategy.",
+                        myselfHealth,
+                        leagueRecoveryPeakHealth_);
+                    reset_league_recovery_state();
+                    return false;
+                }
+
+                if (recovery_timeout) {
+                    LoggerPtr->Warning(
+                        "League health recovery timeout: entry_hp={} peak_hp={} current_hp={}, fallback to normal strategy.",
+                        leagueRecoveryEntryHealth_,
+                        leagueRecoveryPeakHealth_,
+                        myselfHealth);
+                    reset_league_recovery_state();
+                    leagueRecoveryCooldownUntil_ = now + recovery_cooldown;
+                    return false;
+                }
+
+                SetPositionByBaseGoal(LangYa::Recovery.ID, MyTeam, apply_team_offset);
                 naviCommandIntervalClock.reset(Seconds{1});
                 return true;
             }
 
-            if (health_low || (ammo_low && recoveryClock.trigger())) {
+            if (naviCommandGoal == recovery_goal_id &&
+                (effective_health_low || ammo_low || missing_health_input || missing_ammo_input)) {
+                naviCommandIntervalClock.reset(Seconds{1});
+                return true;
+            }
+
+            if (effective_health_low || (ammo_low && recoveryClock.trigger())) {
                 SetPositionByBaseGoal(LangYa::Recovery.ID, MyTeam, apply_team_offset);
                 if (ammo_low) {
                     recoveryClock.tick();

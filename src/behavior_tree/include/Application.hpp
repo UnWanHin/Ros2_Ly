@@ -183,6 +183,12 @@ private:
     bool debugBypassGameStart_{false};
     int waitForGameStartTimeoutSec_{0};
     int leagueRefereeStaleTimeoutMs_{0};
+    bool leagueRecoveryActive_{false};
+    std::chrono::steady_clock::time_point leagueRecoveryStartTime_{};
+    std::chrono::steady_clock::time_point leagueRecoveryReach350Time_{};
+    std::chrono::steady_clock::time_point leagueRecoveryCooldownUntil_{};
+    std::uint16_t leagueRecoveryEntryHealth_{0};
+    std::uint16_t leagueRecoveryPeakHealth_{0};
     std::size_t leaguePatrolGoalIndex_{0};
     bool leaguePatrolGoalInitialized_{false};
     std::size_t showcasePatrolGoalIndex_{0};

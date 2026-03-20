@@ -174,6 +174,11 @@ namespace LangYa {
         ls.HealthRecoveryThreshold = j.value("HealthRecoveryThreshold", ls.HealthRecoveryThreshold);
         ls.UseAmmoRecovery = j.value("UseAmmoRecovery", ls.UseAmmoRecovery);
         ls.AmmoRecoveryThreshold = j.value("AmmoRecoveryThreshold", ls.AmmoRecoveryThreshold);
+        ls.HealthRecoveryExitMin = j.value("HealthRecoveryExitMin", ls.HealthRecoveryExitMin);
+        ls.HealthRecoveryExitPreferred = j.value("HealthRecoveryExitPreferred", ls.HealthRecoveryExitPreferred);
+        ls.HealthRecoveryExitStableSec = j.value("HealthRecoveryExitStableSec", ls.HealthRecoveryExitStableSec);
+        ls.HealthRecoveryMaxHoldSec = j.value("HealthRecoveryMaxHoldSec", ls.HealthRecoveryMaxHoldSec);
+        ls.HealthRecoveryCooldownSec = j.value("HealthRecoveryCooldownSec", ls.HealthRecoveryCooldownSec);
         ls.MainGoal = j.value("MainGoal", ls.MainGoal);
         ls.GoalHoldSec = j.value("GoalHoldSec", ls.GoalHoldSec);
         if (j.contains("PatrolGoals")) {
@@ -300,6 +305,11 @@ namespace BehaviorTree {
         LoggerPtr->Debug("HealthRecoveryThreshold: {}", config.LeagueStrategySettings.HealthRecoveryThreshold);
         LoggerPtr->Debug("UseAmmoRecovery: {}", config.LeagueStrategySettings.UseAmmoRecovery);
         LoggerPtr->Debug("AmmoRecoveryThreshold: {}", config.LeagueStrategySettings.AmmoRecoveryThreshold);
+        LoggerPtr->Debug("HealthRecoveryExitMin: {}", config.LeagueStrategySettings.HealthRecoveryExitMin);
+        LoggerPtr->Debug("HealthRecoveryExitPreferred: {}", config.LeagueStrategySettings.HealthRecoveryExitPreferred);
+        LoggerPtr->Debug("HealthRecoveryExitStableSec: {}", config.LeagueStrategySettings.HealthRecoveryExitStableSec);
+        LoggerPtr->Debug("HealthRecoveryMaxHoldSec: {}", config.LeagueStrategySettings.HealthRecoveryMaxHoldSec);
+        LoggerPtr->Debug("HealthRecoveryCooldownSec: {}", config.LeagueStrategySettings.HealthRecoveryCooldownSec);
         LoggerPtr->Debug("MainGoal: {}", static_cast<int>(config.LeagueStrategySettings.MainGoal));
         LoggerPtr->Debug("GoalHoldSec: {}", config.LeagueStrategySettings.GoalHoldSec);
         LoggerPtr->Debug("------ ShowcasePatrol ------");
@@ -340,6 +350,45 @@ namespace BehaviorTree {
         if (config.LeagueStrategySettings.GoalHoldSec <= 0) {
             LoggerPtr->Warning("Invalid LeagueStrategy.GoalHoldSec={}, fallback to 15.", config.LeagueStrategySettings.GoalHoldSec);
             config.LeagueStrategySettings.GoalHoldSec = 15;
+        }
+        if (config.LeagueStrategySettings.HealthRecoveryExitMin > 400) {
+            LoggerPtr->Warning(
+                "Invalid LeagueStrategy.HealthRecoveryExitMin={}, clamp to 400.",
+                config.LeagueStrategySettings.HealthRecoveryExitMin);
+            config.LeagueStrategySettings.HealthRecoveryExitMin = 400;
+        }
+        if (config.LeagueStrategySettings.HealthRecoveryExitPreferred > 400) {
+            LoggerPtr->Warning(
+                "Invalid LeagueStrategy.HealthRecoveryExitPreferred={}, clamp to 400.",
+                config.LeagueStrategySettings.HealthRecoveryExitPreferred);
+            config.LeagueStrategySettings.HealthRecoveryExitPreferred = 400;
+        }
+        if (config.LeagueStrategySettings.HealthRecoveryExitPreferred <
+            config.LeagueStrategySettings.HealthRecoveryExitMin) {
+            LoggerPtr->Warning(
+                "LeagueStrategy.HealthRecoveryExitPreferred({}) < ExitMin({}), align preferred to min.",
+                config.LeagueStrategySettings.HealthRecoveryExitPreferred,
+                config.LeagueStrategySettings.HealthRecoveryExitMin);
+            config.LeagueStrategySettings.HealthRecoveryExitPreferred =
+                config.LeagueStrategySettings.HealthRecoveryExitMin;
+        }
+        if (config.LeagueStrategySettings.HealthRecoveryExitStableSec <= 0) {
+            LoggerPtr->Warning(
+                "Invalid LeagueStrategy.HealthRecoveryExitStableSec={}, fallback to 1.",
+                config.LeagueStrategySettings.HealthRecoveryExitStableSec);
+            config.LeagueStrategySettings.HealthRecoveryExitStableSec = 1;
+        }
+        if (config.LeagueStrategySettings.HealthRecoveryMaxHoldSec <= 0) {
+            LoggerPtr->Warning(
+                "Invalid LeagueStrategy.HealthRecoveryMaxHoldSec={}, fallback to 12.",
+                config.LeagueStrategySettings.HealthRecoveryMaxHoldSec);
+            config.LeagueStrategySettings.HealthRecoveryMaxHoldSec = 12;
+        }
+        if (config.LeagueStrategySettings.HealthRecoveryCooldownSec < 0) {
+            LoggerPtr->Warning(
+                "Invalid LeagueStrategy.HealthRecoveryCooldownSec={}, fallback to 0.",
+                config.LeagueStrategySettings.HealthRecoveryCooldownSec);
+            config.LeagueStrategySettings.HealthRecoveryCooldownSec = 0;
         }
         if (!IsValidBaseGoal(config.LeagueStrategySettings.MainGoal)) {
             LoggerPtr->Warning(
@@ -460,6 +509,12 @@ namespace BehaviorTree {
         showcasePatrolGoalInitialized_ = false;
         naviDebugGoalIndex_ = 0;
         naviDebugGoalInitialized_ = false;
+        leagueRecoveryActive_ = false;
+        leagueRecoveryStartTime_ = std::chrono::steady_clock::time_point{};
+        leagueRecoveryReach350Time_ = std::chrono::steady_clock::time_point{};
+        leagueRecoveryCooldownUntil_ = std::chrono::steady_clock::time_point{};
+        leagueRecoveryEntryHealth_ = 0;
+        leagueRecoveryPeakHealth_ = 0;
 
         return true;
     }

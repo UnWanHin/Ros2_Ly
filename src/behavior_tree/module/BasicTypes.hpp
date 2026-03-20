@@ -395,6 +395,11 @@ namespace LangYa
         std::uint16_t HealthRecoveryThreshold{100};
         bool UseAmmoRecovery{true};
         std::uint16_t AmmoRecoveryThreshold{30};
+        std::uint16_t HealthRecoveryExitMin{350};
+        std::uint16_t HealthRecoveryExitPreferred{400};
+        int HealthRecoveryExitStableSec{1};
+        int HealthRecoveryMaxHoldSec{12};
+        int HealthRecoveryCooldownSec{20};
         std::uint8_t MainGoal{OccupyArea.ID};
         std::vector<std::uint8_t> PatrolGoals{};
         int GoalHoldSec{15};
