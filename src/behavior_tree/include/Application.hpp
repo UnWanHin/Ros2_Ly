@@ -190,6 +190,7 @@ private:
     bool leagueRecoveryActive_{false};
     std::chrono::steady_clock::time_point leagueRecoveryStartTime_{};
     std::chrono::steady_clock::time_point leagueRecoveryReach350Time_{};
+    std::chrono::steady_clock::time_point leagueRecoveryLastIncreaseTime_{};
     std::chrono::steady_clock::time_point leagueRecoveryCooldownUntil_{};
     std::uint16_t leagueRecoveryEntryHealth_{0};
     std::uint16_t leagueRecoveryPeakHealth_{0};

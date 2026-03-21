@@ -399,8 +399,10 @@ namespace LangYa
         std::uint16_t HealthRecoveryThreshold{100};
         bool UseAmmoRecovery{true};
         std::uint16_t AmmoRecoveryThreshold{30};
+        bool DamageScanBoostEnable{true};
         std::uint16_t HealthRecoveryExitMin{350};
         std::uint16_t HealthRecoveryExitPreferred{400};
+        int HealthRecoveryPlateauSec{2};
         int HealthRecoveryExitStableSec{1};
         int HealthRecoveryMaxHoldSec{12};
         int HealthRecoveryCooldownSec{20};

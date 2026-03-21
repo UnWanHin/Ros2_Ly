@@ -114,6 +114,9 @@ namespace BehaviorTree {
         int now_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - gameStartTime).count();
         static constexpr auto delta_yaw = 1.0f;
         static constexpr auto buff_yaw = -50.0f + 360.0f;
+        static constexpr auto kPatrolScanYawStep = 4.0f * delta_yaw;
+        static constexpr auto kPatrolScanYawBoostStep = 6.0f * delta_yaw;
+        static constexpr int kDamageScanBoostWindowMs = 1300;
 
         
         // 小陀螺策略：
@@ -135,9 +138,11 @@ namespace BehaviorTree {
         }
 
         bool in_damage_rotate_window = false;
+        int damage_rotate_elapsed_ms = -1;
         if (last_damage_rotate_time.time_since_epoch().count() != 0) {
             const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 rotate_now - last_damage_rotate_time).count();
+            damage_rotate_elapsed_ms = static_cast<int>(elapsed_ms);
             in_damage_rotate_window = elapsed_ms <= kDamageRotateWindowMs;
             if (in_damage_rotate_window) {
                 const auto phase = static_cast<int>((elapsed_ms / kRotatePhaseMs) % 6);
@@ -207,14 +212,26 @@ namespace BehaviorTree {
             if(aimMode != AimMode::Buff) {
                 if (!config.AimDebugSettings.StopScan && now - lastFoundEnemyTime > std::chrono::milliseconds(2000)) {
                     static auto last_searching_log = std::chrono::steady_clock::time_point{};
+                    const bool boost_patrol_scan =
+                        config.LeagueStrategySettings.DamageScanBoostEnable &&
+                        aimMode == AimMode::RotateScan &&
+                        damage_rotate_elapsed_ms >= 0 &&
+                        damage_rotate_elapsed_ms <= kDamageScanBoostWindowMs;
+                    const auto yaw_scan_step = boost_patrol_scan
+                        ? kPatrolScanYawBoostStep
+                        : kPatrolScanYawStep;
                     if (now - last_searching_log > std::chrono::seconds(2)) {
-                        LoggerPtr->Debug("Searching Target...");
+                        LoggerPtr->Debug(
+                            "Searching Target... yaw_step={} (damage_boost={} elapsed_ms={})",
+                            yaw_scan_step,
+                            boost_patrol_scan ? 1 : 0,
+                            damage_rotate_elapsed_ms);
                         last_searching_log = now;
                         gimbalControlData.FireCode.AimMode = 0;
                     }
                     const auto current_time = std::chrono::steady_clock::now();
                     nextAngles = GimbalAnglesType{
-                        static_cast<AngleType>(gimbalAngles.Yaw + 4 * delta_yaw),
+                        static_cast<AngleType>(gimbalAngles.Yaw + yaw_scan_step),
                         AngleType{-0.0f + pitch_wave.Produce(current_time) * 3.0f}
                     };
 
@@ -876,13 +893,14 @@ namespace BehaviorTree {
             const auto now = std::chrono::steady_clock::now();
             const std::uint16_t recovery_exit_min = league.HealthRecoveryExitMin;
             const std::uint16_t recovery_exit_preferred = league.HealthRecoveryExitPreferred;
-            const auto recovery_exit_stable = std::chrono::seconds(league.HealthRecoveryExitStableSec);
+            const auto recovery_plateau = std::chrono::seconds(league.HealthRecoveryPlateauSec);
             const auto recovery_max_hold = std::chrono::seconds(league.HealthRecoveryMaxHoldSec);
             const auto recovery_cooldown = std::chrono::seconds(league.HealthRecoveryCooldownSec);
             auto reset_league_recovery_state = [&]() {
                 leagueRecoveryActive_ = false;
                 leagueRecoveryStartTime_ = std::chrono::steady_clock::time_point{};
                 leagueRecoveryReach350Time_ = std::chrono::steady_clock::time_point{};
+                leagueRecoveryLastIncreaseTime_ = std::chrono::steady_clock::time_point{};
                 leagueRecoveryEntryHealth_ = 0;
                 leagueRecoveryPeakHealth_ = 0;
             };
@@ -903,24 +921,19 @@ namespace BehaviorTree {
             };
 
             const bool health_ready = is_referee_value_ready(hasReceivedMyselfHealth_, lastMyselfHealthRxTime);
-            const bool ammo_ready = is_referee_value_ready(hasReceivedAmmoLeft_, lastAmmoLeftRxTime);
             const bool health_low = league.UseHealthRecovery && health_ready &&
                 myselfHealth < league.HealthRecoveryThreshold;
-            const bool ammo_low = league.UseAmmoRecovery && ammo_ready &&
-                ammoLeft <= league.AmmoRecoveryThreshold;
             const bool missing_health_input = league.UseHealthRecovery && !health_ready;
-            const bool missing_ammo_input = league.UseAmmoRecovery && !ammo_ready;
             const bool health_recovery_cooldown_active =
                 leagueRecoveryCooldownUntil_.time_since_epoch().count() != 0 &&
                 now < leagueRecoveryCooldownUntil_;
             const bool effective_health_low = health_low && !health_recovery_cooldown_active;
 
-            if ((missing_health_input || missing_ammo_input) &&
+            if (missing_health_input &&
                 (now - lastLeagueRecoveryGuardLogTime_ > std::chrono::seconds(2))) {
                 LoggerPtr->Warning(
-                    "League recovery guard: skip invalid referee inputs (health_ready={} ammo_ready={} stale_timeout_ms={})",
+                    "League recovery guard: skip invalid referee inputs (health_ready={} stale_timeout_ms={})",
                     health_ready ? 1 : 0,
-                    ammo_ready ? 1 : 0,
                     leagueRefereeStaleTimeoutMs_);
                 lastLeagueRecoveryGuardLogTime_ = now;
             }
@@ -939,6 +952,7 @@ namespace BehaviorTree {
                 leagueRecoveryActive_ = true;
                 leagueRecoveryStartTime_ = now;
                 leagueRecoveryReach350Time_ = std::chrono::steady_clock::time_point{};
+                leagueRecoveryLastIncreaseTime_ = now;
                 leagueRecoveryEntryHealth_ = myselfHealth;
                 leagueRecoveryPeakHealth_ = myselfHealth;
                 LoggerPtr->Info(
@@ -950,28 +964,21 @@ namespace BehaviorTree {
             if (leagueRecoveryActive_) {
                 if (health_ready && myselfHealth > leagueRecoveryPeakHealth_) {
                     leagueRecoveryPeakHealth_ = myselfHealth;
-                }
-
-                if (health_ready && myselfHealth >= recovery_exit_min) {
-                    if (leagueRecoveryReach350Time_.time_since_epoch().count() == 0) {
-                        leagueRecoveryReach350Time_ = now;
-                    }
-                } else {
-                    leagueRecoveryReach350Time_ = std::chrono::steady_clock::time_point{};
+                    leagueRecoveryLastIncreaseTime_ = now;
                 }
 
                 const bool reach_preferred =
                     health_ready && myselfHealth >= recovery_exit_preferred;
-                const bool reach_min_stable =
+                const bool reach_min_plateau =
                     health_ready &&
                     myselfHealth >= recovery_exit_min &&
-                    leagueRecoveryReach350Time_.time_since_epoch().count() != 0 &&
-                    (now - leagueRecoveryReach350Time_) >= recovery_exit_stable;
+                    leagueRecoveryLastIncreaseTime_.time_since_epoch().count() != 0 &&
+                    (now - leagueRecoveryLastIncreaseTime_) >= recovery_plateau;
                 const bool recovery_timeout =
                     leagueRecoveryStartTime_.time_since_epoch().count() != 0 &&
                     (now - leagueRecoveryStartTime_) >= recovery_max_hold;
 
-                if (reach_preferred || reach_min_stable) {
+                if (reach_preferred || reach_min_plateau) {
                     LoggerPtr->Info(
                         "League health recovery completed: hp={} (peak={}), return to normal strategy.",
                         myselfHealth,
@@ -998,16 +1005,13 @@ namespace BehaviorTree {
             }
 
             if (naviCommandGoal == recovery_goal_id &&
-                (effective_health_low || ammo_low || missing_health_input || missing_ammo_input)) {
+                (effective_health_low || missing_health_input)) {
                 naviCommandIntervalClock.reset(Seconds{1});
                 return true;
             }
 
-            if (effective_health_low || (ammo_low && recoveryClock.trigger())) {
+            if (effective_health_low) {
                 SetPositionByBaseGoal(LangYa::Recovery.ID, MyTeam, apply_team_offset);
-                if (ammo_low) {
-                    recoveryClock.tick();
-                }
                 naviCommandIntervalClock.reset(Seconds{1});
                 return true;
             }
