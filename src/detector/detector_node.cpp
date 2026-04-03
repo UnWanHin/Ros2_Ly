@@ -74,6 +74,7 @@ LY_DEF_ROS_TOPIC(ly_backcamera_image, "/ly/backcamera/image", sensor_msgs::msg::
 LY_DEF_ROS_TOPIC(ly_me_is_team_red, "/ly/me/is_team_red", std_msgs::msg::Bool);
 LY_DEF_ROS_TOPIC(ly_bt_target, "/ly/bt/target", std_msgs::msg::UInt8);
 LY_DEF_ROS_TOPIC(ly_detector_armors, "/ly/detector/armors", auto_aim_common::msg::Armors);
+LY_DEF_ROS_TOPIC(ly_detector_high_armors, "/ly/detector/high_armors", auto_aim_common::msg::Armors);
 LY_DEF_ROS_TOPIC(ly_gimbal_angles, "/ly/gimbal/angles", gimbal_driver::msg::GimbalAngles);
 LY_DEF_ROS_TOPIC(ly_compressed_image, "/ly/compressed/image", sensor_msgs::msg::CompressedImage);
 LY_DEF_ROS_TOPIC(ly_ra_angle_image, "/ly/ra/angle_image", auto_aim_common::msg::AngleImage);
@@ -398,6 +399,7 @@ void ImageLoop() {
                 TimedArmors armors;
                 std::vector<ly_auto_aim::CarDetection> cars;
                 auto_aim_common::msg::Armors armor_list_msg; // ROS2 增加 ::msg::
+                auto_aim_common::msg::Armors high_armor_list_msg;
                 std::vector<ly_auto_aim::ArmorObject> filtered_armors{};
                 ly_auto_aim::ArmorObject target_armor;
 
@@ -435,9 +437,19 @@ void ImageLoop() {
                 armor_list_msg.is_available_armor_for_predictor = false;
                 armor_list_msg.target_armor_index_for_predictor = -1;
 
+                high_armor_list_msg.armors.clear();
+                high_armor_list_msg.cars.clear();
+                high_armor_list_msg.header.frame_id = "camera";
+                high_armor_list_msg.header.stamp = armors.TimeStamp;
+                high_armor_list_msg.yaw = armors.TimeAngles.yaw;
+                high_armor_list_msg.pitch = armors.TimeAngles.pitch;
+                high_armor_list_msg.is_available_armor_for_predictor = false;
+                high_armor_list_msg.target_armor_index_for_predictor = -1;
+
                 auto publish_result = [&]() {
                     if(aa_enable){
                         global_node->Publisher<ly_detector_armors>()->publish(armor_list_msg);
+                        global_node->Publisher<ly_detector_high_armors>()->publish(high_armor_list_msg);
                     }else if(outpost_enable){
                         global_node->Publisher<ly_outpost_armors>()->publish(armor_list_msg);
                     }
@@ -493,7 +505,7 @@ void ImageLoop() {
                     continue;
                 }
 
-                if (!finder.ReFindAndSolveAll(*poseSolver, filtered_armors, target, target_armor, armor_list_msg)) {
+                if (!finder.ReFindAndSolveAll(*poseSolver, filtered_armors, target, target_armor, armor_list_msg, &high_armor_list_msg, 1.0f)) {
                     // 以前的 ROS_WARN 替换
                 }
 

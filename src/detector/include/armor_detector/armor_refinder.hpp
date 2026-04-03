@@ -21,7 +21,13 @@ namespace ly_auto_aim::inline detector{
          * @param target_armor 传出的目标装甲板
          * @param target 传入的决策目标
          */
-        [[nodiscard]] bool ReFindAndSolveAll(PoseSolver& solver, const std::vector<ArmorObject>& armors, const ArmorType& target, ArmorObject& target_armor, auto_aim_common::msg::Armors& armors_msg) noexcept;
+        [[nodiscard]] bool ReFindAndSolveAll(PoseSolver& solver,
+                                             const std::vector<ArmorObject>& armors,
+                                             const ArmorType& target,
+                                             ArmorObject& target_armor,
+                                             auto_aim_common::msg::Armors& armors_msg,
+                                             auto_aim_common::msg::Armors* high_armors_msg = nullptr,
+                                             float high_height_threshold_m = 1.0f) noexcept;
 
         /**
          * 暂时弃用的函数
