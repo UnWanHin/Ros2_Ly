@@ -159,6 +159,7 @@ scripts/
 | `scripts/debug/rotate_level.sh` | Rotate 档位循环与回读测试 | 脚本内置发布/回读逻辑 |
 | `scripts/debug/move_rotate.sh` | 小陀螺 + 正弦平移联动测试 | `scripts/feature_test/standalone/modes/chassis_spin_sine_translate_mode.sh` |
 | `scripts/debug/posture_test.sh` | 姿态切换循环与回读测试 | 脚本内置发布/回读逻辑 |
+| `scripts/debug/chase_only.sh` | 纯追击联调（无门控，默认连下位机） | `scripts/launch/start_sentry_chase_only.sh` |
 
 ### Selfcheck
 
@@ -201,6 +202,7 @@ scripts/
 9. `rotate_level`
 10. `move_rotate`
 11. `posture-test`
+12. `chase-only`
 
 ### `./scripts/selfcheck.sh`
 
@@ -239,6 +241,9 @@ scripts/
 
 # 导航调试
 ./scripts/debug.sh navi-debug
+
+# 纯追击联调（默认无门控，连下位机）
+./scripts/debug.sh chase-only
 
 # 离车自检
 ./scripts/selfcheck.sh pc

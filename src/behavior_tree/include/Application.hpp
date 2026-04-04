@@ -178,6 +178,7 @@ private:
     std::uint8_t naviCommandGoal{0}; // 导航目标
     Area::Point<std::uint16_t> naviGoalPosition{}; // 导航定位目标
     std::uint8_t lastNaviComnamdGoal{0}; // 上一次导航目标
+    VelocityType naviVelocityInput{0, 0}; /// 外部导航输入速度（/ly/navi/vel）
     VelocityType naviVelocity{0, 0}; /// 定义回调，接收导航的速度控制数据
     TimerClock naviCommandIntervalClock{Seconds{10}}, recoveryClock{Seconds{90}}; // 控制间隔，回家时间 
     std::uint8_t speedLevel{1}; // 0 没电, 1 正常, 2 快速

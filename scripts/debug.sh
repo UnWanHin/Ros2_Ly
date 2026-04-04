@@ -25,6 +25,7 @@ Entries:
   rotate_level          /ly/control/firecode rotate level cycle test.
   move_rotate           Rotate + /ly/control/vel sine-translate test.
   posture-test          /ly/control/posture cycle test and /ly/gimbal/posture watch.
+  chase-only            No-gate pure chase test (lower-machine online by default).
 
 Examples:
   ./scripts/debug.sh
@@ -70,6 +71,9 @@ run_entry() {
     11|posture-test|posture_test|posture)
       exec "${ROOT_DIR}/debug/posture_test.sh" "$@"
       ;;
+    12|chase-only|chase_only|chase)
+      exec "${ROOT_DIR}/debug/chase_only.sh" "$@"
+      ;;
     ""|menu)
       ;;
     *)
@@ -101,6 +105,7 @@ echo "  8) control-angles-test"
 echo "  9) rotate_level"
 echo " 10) move_rotate"
 echo " 11) posture-test"
-read -r -p "Input 1-11 [default: 1]: " choice
+echo " 12) chase-only"
+read -r -p "Input 1-12 [default: 1]: " choice
 choice="${choice:-1}"
 run_entry "${choice}"

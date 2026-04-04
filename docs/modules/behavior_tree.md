@@ -319,6 +319,20 @@ void TreeTick() {
 - `bt_tree_file:=Scripts/main.xml`
   - 顯式指定 BT XML 文件
 
+### 追擊配置（新增）
+
+比賽配置文件（`regional_competition.json` / `league_competition.json`）新增：
+
+- `AimTargetPriority`：目標優先級（按 `ArmorType` 整數 ID 排序）
+  - 默認：`[1, 3, 4, 6, 2]`（Hero > Infantry1 > Infantry2 > Sentry > Engineer）
+- `Chase`：底盤追擊配置
+  - `Enable`：總開關
+  - `PreferredDistanceCm`：與目標保持的最適距離（cm）
+  - `DistanceDeadbandCm`：距離死區（cm）
+  - `DistanceKp` / `MaxForwardSpeed` / `MaxBackwardSpeed`：前後追擊控制
+  - `UseYawStrafe` / `YawKp` / `YawDeadbandDeg` / `MaxStrafeSpeed`：側向跟隨控制
+  - `LostTargetHoldMs` / `StopWhenNoTarget`：丟目標回退策略
+
 ### 黑板結構（兩種賽制一致）
 
 - 分區賽與聯盟賽都共用同一套 BT 主循環與雙黑板結構。

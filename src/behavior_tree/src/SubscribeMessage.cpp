@@ -146,6 +146,9 @@ namespace BehaviorTree{
 
         // ly_navi_vel
         GenSub<ly_navi_vel>([](Application& app, auto msg) {
+            app.naviVelocityInput.X = msg->x;
+            app.naviVelocityInput.Y = msg->y;
+            // 兼容旧语义：保留原始转发链路变量
             app.naviVelocity.X = msg->x;
             app.naviVelocity.Y = msg->y;
         });
