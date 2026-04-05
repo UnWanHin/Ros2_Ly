@@ -127,6 +127,10 @@ namespace BehaviorTree {
         GlobalBlackboard_->set<std::uint8_t>("PostureCommand", postureCommand);
         GlobalBlackboard_->set<bool>("PostureUnderFireRecent", IsUnderFireRecent());
         GlobalBlackboard_->set<bool>("PostureUnderFireBurst", IsUnderFireBurst());
+        GlobalBlackboard_->set<std::int16_t>("GimbalYawVelRaw", gimbalYawVelRaw);
+        GlobalBlackboard_->set<std::int16_t>("GimbalPitchVelRaw", gimbalPitchVelRaw);
+        GlobalBlackboard_->set<float>("GimbalYawVelDegPerSec", gimbalYawVelDegPerSec);
+        GlobalBlackboard_->set<float>("GimbalPitchVelDegPerSec", gimbalPitchVelDegPerSec);
 
         const auto now = std::chrono::steady_clock::now();
         if (now - lastUpdateBlackboardLogTime_ > std::chrono::seconds(2)) {

@@ -15,6 +15,7 @@
  */
 #include <auto_aim_common/msg/armor.hpp>
 #include <auto_aim_common/msg/armors.hpp>
+#include <auto_aim_common/msg/buff_debug.hpp>
 #include <auto_aim_common/msg/debug_filter.hpp>
 #include <auto_aim_common/msg/predictor_vis.hpp>
 #include <gimbal_driver/msg/gimbal_angles.hpp>
@@ -32,6 +33,7 @@
 #include <mutex>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/msg/image.hpp>
@@ -86,6 +88,7 @@ LY_DEF_ROS_TOPIC(ly_ra_angle_image, "/ly/ra/angle_image", auto_aim_common::msg::
 LY_DEF_ROS_TOPIC(ly_outpost_armors, "/ly/outpost/armors", auto_aim_common::msg::Armors);
 LY_DEF_ROS_TOPIC(ly_predictor_debug, "/ly/predictor/debug", auto_aim_common::msg::DebugFilter);
 LY_DEF_ROS_TOPIC(ly_predictor_vis, "/ly/predictor/vis", auto_aim_common::msg::PredictorVis);
+LY_DEF_ROS_TOPIC(ly_buff_debug, "/ly/buff/debug", auto_aim_common::msg::BuffDebug);
 
 /// 配置变量
 bool pub_image = true;
@@ -100,7 +103,11 @@ std::string video_path;
 std::string camera_sn;
 bool overlay_predictor_center = false;
 bool overlay_predictor_full = false;
+bool overlay_predictor_text = false;
 int overlay_predictor_timeout_ms = 120;
+bool overlay_buff_text = false;
+bool overlay_buff_show_position = false;
+int overlay_buff_timeout_ms = 150;
 
 /// 宏常量与状态量
 std::atomic_bool myTeamRed{false};
@@ -131,6 +138,11 @@ std::mutex predictor_vis_mutex;
 auto_aim_common::msg::PredictorVis latest_predictor_vis;
 rclcpp::Time latest_predictor_vis_stamp;
 bool has_predictor_vis = false;
+
+std::mutex buff_debug_mutex;
+auto_aim_common::msg::BuffDebug latest_buff_debug;
+rclcpp::Time latest_buff_debug_stamp;
+bool has_buff_debug = false;
 
 struct GimbalAnglesType {
     float yaw{0.0f};
@@ -292,11 +304,28 @@ void InitialParam(){
         {"detector_config.overlay_predictor_full", "detector_config/overlay_predictor_full"},
         overlay_predictor_full,
         false);
+    LoadParamCompat<bool>(
+        {"detector_config.overlay_predictor_text", "detector_config/overlay_predictor_text"},
+        overlay_predictor_text,
+        false);
     LoadParamCompat<int>(
         {"detector_config.overlay_predictor_timeout_ms", "detector_config/overlay_predictor_timeout_ms"},
         overlay_predictor_timeout_ms,
         120);
+    LoadParamCompat<bool>(
+        {"detector_config.overlay_buff_text", "detector_config/overlay_buff_text"},
+        overlay_buff_text,
+        false);
+    LoadParamCompat<bool>(
+        {"detector_config.overlay_buff_show_position", "detector_config/overlay_buff_show_position"},
+        overlay_buff_show_position,
+        false);
+    LoadParamCompat<int>(
+        {"detector_config.overlay_buff_timeout_ms", "detector_config/overlay_buff_timeout_ms"},
+        overlay_buff_timeout_ms,
+        150);
     overlay_predictor_timeout_ms = std::max(0, overlay_predictor_timeout_ms);
+    overlay_buff_timeout_ms = std::max(0, overlay_buff_timeout_ms);
 }
 
 void ConfigureCamera() {
@@ -375,6 +404,13 @@ void predictor_vis_callback(const auto_aim_common::msg::PredictorVis::ConstShare
     has_predictor_vis = true;
 }
 
+void buff_debug_callback(const auto_aim_common::msg::BuffDebug::ConstSharedPtr& msg) {
+    std::lock_guard<std::mutex> lock(buff_debug_mutex);
+    latest_buff_debug = *msg;
+    latest_buff_debug_stamp = global_node->now();
+    has_buff_debug = true;
+}
+
 void DrawArmor(cv::Mat &image, const ly_auto_aim::ArmorObject &armor) {
     for (std::size_t point_index = 0; point_index < 4; ++point_index) {
         cv::circle(image, armor.apex[point_index], 5, cv::Scalar(0, 0, 255), -1);
@@ -445,6 +481,24 @@ bool ProjectWorldPointToImage(
     return true;
 }
 
+bool OverlayMessageFresh(const rclcpp::Time& now, const rclcpp::Time& stamp, int timeout_ms) {
+    if (timeout_ms <= 0) {
+        return true;
+    }
+    return (now - stamp) <= rclcpp::Duration::from_seconds(timeout_ms / 1000.0);
+}
+
+const char* BuffModeName(const std::uint8_t mode) {
+    switch (mode) {
+        case 1:
+            return "small";
+        case 2:
+            return "big";
+        default:
+            return "auto";
+    }
+}
+
 void DrawPredictorCenterOverlay(cv::Mat& image, const GimbalAnglesType& gimbal_angles, const rclcpp::Time& now) {
     if (!overlay_predictor_center || image.empty()) {
         return;
@@ -463,8 +517,7 @@ void DrawPredictorCenterOverlay(cv::Mat& image, const GimbalAnglesType& gimbal_a
     if (!debug_msg.tracking) {
         return;
     }
-    if (overlay_predictor_timeout_ms > 0 &&
-        (now - debug_stamp) > rclcpp::Duration::from_seconds(overlay_predictor_timeout_ms / 1000.0)) {
+    if (!OverlayMessageFresh(now, debug_stamp, overlay_predictor_timeout_ms)) {
         return;
     }
 
@@ -493,8 +546,7 @@ void DrawPredictorFullOverlay(cv::Mat& image, const GimbalAnglesType& gimbal_ang
         vis_msg = latest_predictor_vis;
         vis_stamp = latest_predictor_vis_stamp;
     }
-    if (overlay_predictor_timeout_ms > 0 &&
-        (now - vis_stamp) > rclcpp::Duration::from_seconds(overlay_predictor_timeout_ms / 1000.0)) {
+    if (!OverlayMessageFresh(now, vis_stamp, overlay_predictor_timeout_ms)) {
         return;
     }
     if (!vis_msg.has_predictions) {
@@ -513,6 +565,16 @@ void DrawPredictorFullOverlay(cv::Mat& image, const GimbalAnglesType& gimbal_ang
                 image,
                 center_pixel)) {
             cv::circle(image, center_pixel, 4, cv::Scalar(150, 150, 150), -1);
+            if (overlay_predictor_text) {
+                cv::putText(
+                    image,
+                    cv::format("car:%d %s", car.car_id, car.stable ? "stable" : "unstable"),
+                    center_pixel + cv::Point(8, -8),
+                    cv::FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    cv::Scalar(180, 180, 180),
+                    1);
+            }
         }
 
         for (const auto& armor : car.armors) {
@@ -546,7 +608,158 @@ void DrawPredictorFullOverlay(cv::Mat& image, const GimbalAnglesType& gimbal_ang
                 0.45,
                 color,
                 1);
+            if (overlay_predictor_text) {
+                const double gimbal_yaw_rad = static_cast<double>(gimbal_angles.yaw) * M_PI / 180.0;
+                const double yaw_delta =
+                    std::remainder(static_cast<double>(armor.yaw) - gimbal_yaw_rad, 2.0 * M_PI);
+                cv::putText(
+                    image,
+                    cv::format("dyaw=%.2f", yaw_delta),
+                    armor_pixel + cv::Point(8, 10),
+                    cv::FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    cv::Scalar(0, 255, 255),
+                    1);
+                cv::putText(
+                    image,
+                    cv::format("st=%d", armor.status),
+                    armor_pixel + cv::Point(8, 24),
+                    cv::FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    color,
+                    1);
+            }
         }
+    }
+}
+
+void DrawPredictorStateTextOverlay(cv::Mat& image, const rclcpp::Time& now) {
+    if (!overlay_predictor_text || image.empty()) {
+        return;
+    }
+
+    auto_aim_common::msg::DebugFilter debug_msg;
+    rclcpp::Time debug_stamp;
+    {
+        std::lock_guard<std::mutex> lock(predictor_debug_mutex);
+        if (!has_predictor_debug) {
+            return;
+        }
+        debug_msg = latest_predictor_debug;
+        debug_stamp = latest_predictor_debug_stamp;
+    }
+    if (!debug_msg.tracking || !OverlayMessageFresh(now, debug_stamp, overlay_predictor_timeout_ms)) {
+        return;
+    }
+
+    int y = 24;
+    constexpr int kX = 14;
+    constexpr int kDy = 18;
+    constexpr double kScale = 0.48;
+    const cv::Scalar color(0, 220, 255);
+    auto put_line = [&](const std::string& line) {
+        cv::putText(
+            image,
+            line,
+            cv::Point(kX, y),
+            cv::FONT_HERSHEY_SIMPLEX,
+            kScale,
+            color,
+            1);
+        y += kDy;
+    };
+
+    put_line(cv::format(
+        "pred xyz[m]: %.2f %.2f %.2f",
+        debug_msg.position.x,
+        debug_msg.position.y,
+        debug_msg.position.z));
+    put_line(cv::format(
+        "pred vel[m/s]: %.2f %.2f %.2f",
+        debug_msg.velocity.x,
+        debug_msg.velocity.y,
+        debug_msg.velocity.z));
+    put_line(cv::format(
+        "pred yaw/omega: %.2f %.2f",
+        debug_msg.yaw,
+        debug_msg.v_yaw));
+    put_line(cv::format(
+        "pred r1/r2/z2: %.2f %.2f %.2f",
+        debug_msg.radius_1,
+        debug_msg.radius_2,
+        debug_msg.z_2));
+}
+
+void DrawBuffDebugTextOverlay(cv::Mat& image, const rclcpp::Time& now) {
+    if (!overlay_buff_text || image.empty()) {
+        return;
+    }
+
+    auto_aim_common::msg::BuffDebug buff_msg;
+    rclcpp::Time buff_stamp;
+    {
+        std::lock_guard<std::mutex> lock(buff_debug_mutex);
+        if (!has_buff_debug) {
+            return;
+        }
+        buff_msg = latest_buff_debug;
+        buff_stamp = latest_buff_debug_stamp;
+    }
+    if (!OverlayMessageFresh(now, buff_stamp, overlay_buff_timeout_ms)) {
+        return;
+    }
+
+    int y = 24;
+    const int x = std::max(14, image.cols - 370);
+    constexpr int kDy = 18;
+    constexpr double kScale = 0.48;
+    const cv::Scalar header_color(255, 220, 120);
+    const cv::Scalar status_color = buff_msg.status ? cv::Scalar(80, 255, 80) : cv::Scalar(80, 80, 255);
+
+    auto put_line = [&](const std::string& line, const cv::Scalar& color) {
+        cv::putText(
+            image,
+            line,
+            cv::Point(x, y),
+            cv::FONT_HERSHEY_SIMPLEX,
+            kScale,
+            color,
+            1);
+        y += kDy;
+    };
+
+    put_line("buff debug", header_color);
+    put_line(
+        cv::format(
+            "status=%s mode=%s(%d)",
+            buff_msg.status ? "ok" : "fail",
+            BuffModeName(buff_msg.mode),
+            static_cast<int>(buff_msg.mode)),
+        status_color);
+    put_line(
+        cv::format(
+            "target yaw/pitch: %.2f %.2f",
+            buff_msg.target_yaw,
+            buff_msg.target_pitch),
+        status_color);
+    put_line(
+        cv::format(
+            "distance/height: %.2f %.2f",
+            buff_msg.distance_m,
+            buff_msg.height_m),
+        status_color);
+    put_line(
+        cv::format("rotation_angle: %.2f", buff_msg.rotation_angle),
+        status_color);
+
+    if (overlay_buff_show_position) {
+        put_line(
+            cv::format(
+                "target xyz[m]: %.2f %.2f %.2f",
+                buff_msg.target_x_m,
+                buff_msg.target_y_m,
+                buff_msg.target_z_m),
+            status_color);
     }
 }
 
@@ -733,6 +946,8 @@ void ImageLoop() {
                 if(draw_image) DrawAllCar(image, cars);
                 DrawPredictorCenterOverlay(image, armors.TimeAngles, armors.TimeStamp);
                 DrawPredictorFullOverlay(image, armors.TimeAngles, armors.TimeStamp);
+                DrawPredictorStateTextOverlay(image, armors.TimeStamp);
+                DrawBuffDebugTextOverlay(image, armors.TimeStamp);
 
                 log_detection_summary(
                     armors.Armors.size(),
@@ -887,6 +1102,7 @@ int main(int argc, char **argv) try {
     global_node->GenSubscriber<ly_outpost_enable>(outpost_enable_callback);
     global_node->GenSubscriber<ly_predictor_debug>(predictor_debug_callback);
     global_node->GenSubscriber<ly_predictor_vis>(predictor_vis_callback);
+    global_node->GenSubscriber<ly_buff_debug>(buff_debug_callback);
 
     // 進入圖像循環
     ImageLoop();

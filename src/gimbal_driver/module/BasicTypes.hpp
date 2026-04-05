@@ -202,8 +202,8 @@ namespace LangYa
     struct ExtendData {
         static constexpr auto TypeID = 6;
         std::uint16_t UWBAngleYaw; // 2 字节
-        std::uint16_t Reserve_16; // 
-        std::uint32_t Reserve_32_1;
+        std::uint16_t Reserve_16; // 高8位放posture
+        std::uint32_t Reserve_32_1; //放gimbal_vel的，16位一個
         std::uint32_t Reserve_32_2;
     };
 

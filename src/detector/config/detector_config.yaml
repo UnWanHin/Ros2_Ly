@@ -32,5 +32,13 @@
     "detector_config/overlay_predictor_center": false
     "detector_config.overlay_predictor_full": false
     "detector_config/overlay_predictor_full": false
+    "detector_config.overlay_predictor_text": false
+    "detector_config/overlay_predictor_text": false
     "detector_config.overlay_predictor_timeout_ms": 120
     "detector_config/overlay_predictor_timeout_ms": 120
+    "detector_config.overlay_buff_text": false
+    "detector_config/overlay_buff_text": false
+    "detector_config.overlay_buff_show_position": false
+    "detector_config/overlay_buff_show_position": false
+    "detector_config.overlay_buff_timeout_ms": 150
+    "detector_config/overlay_buff_timeout_ms": 150
