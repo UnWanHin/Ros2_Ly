@@ -193,7 +193,7 @@ namespace BehaviorTree {
                 rotate_under_fire = true;
                 rotate_ramp_start_time = rotate_now;
             }
-            rotateTimerClock.tick();
+            rotateTimerClock.tick()
         }
 
         bool in_damage_rotate_window = false;

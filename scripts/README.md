@@ -157,6 +157,7 @@ scripts/
 | `scripts/debug/navi_goal_cli.sh` | 手动发导航目标 | `scripts/feature_test/standalone/tools/navi_goal_cli_pub.py` |
 | `scripts/debug/ballistic_error_log.sh` | 过滤弹道/锁敌日志 | `scripts/tools/monitor_ballistic_errors.sh` |
 | `scripts/debug/shooting_table_calib.sh` | 射表标定 | `scripts/launch/shooting_table_calib.sh` |
+| `scripts/debug/buff_shooting_table_calib.sh` | 打符射表标定 | `scripts/launch/buff_shooting_table_calib.sh` |
 | `scripts/debug/control_angles_test.sh` | 直接发 `/ly/control/angles` 角度命令 | 脚本内置发布逻辑 |
 | `scripts/debug/rotate_level.sh` | Rotate 档位循环与回读测试 | 脚本内置发布/回读逻辑 |
 | `scripts/debug/move_rotate.sh` | 小陀螺 + 正弦平移联动测试 | `scripts/feature_test/standalone/modes/chassis_spin_sine_translate_mode.sh` |
@@ -200,11 +201,12 @@ scripts/
 5. `navi-goal-cli`
 6. `ballistic-log`
 7. `shooting-table-calib`
-8. `control-angles-test`
-9. `rotate_level`
-10. `move_rotate`
-11. `posture-test`
-12. `chase-only`
+8. `buff-shooting-table-calib`
+9. `control-angles-test`
+10. `rotate_level`
+11. `move_rotate`
+12. `posture-test`
+13. `chase-only`
 
 ### `./scripts/selfcheck.sh`
 
@@ -237,6 +239,9 @@ scripts/
 
 # 射表标定
 ./scripts/debug.sh shooting-table-calib --team red --output screen
+
+# 打符射表标定（采样）
+./scripts/debug.sh buff-shooting-table-calib --calib-mode periodic --csv-strategy latest
 
 # 弹道/锁敌异常日志过滤
 ./scripts/debug.sh ballistic-log --with-valid

@@ -24,6 +24,7 @@
 #include "auto_aim_common/msg/armors.hpp"
 #include "auto_aim_common/msg/target.hpp"
 #include "auto_aim_common/msg/angle_image.hpp"
+#include "auto_aim_common/msg/buff_debug.hpp"
 
 // gimbal_driver - 去掉重复，根据实际文件后缀决定
 #include "gimbal_driver/msg/gimbal_angles.hpp"
@@ -59,6 +60,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
@@ -78,6 +80,7 @@ LY_DEF_ROS_TOPIC(ly_gimbal_firecode, "/ly/gimbal/firecode", std_msgs::msg::UInt8
 LY_DEF_ROS_TOPIC(ly_bullet_speed, "/ly/bullet/speed", std_msgs::msg::Float32);
 
 LY_DEF_ROS_TOPIC(ly_buff_target, "/ly/buff/target", auto_aim_common::msg::Target)
+LY_DEF_ROS_TOPIC(ly_buff_debug, "/ly/buff/debug", auto_aim_common::msg::BuffDebug)
 
 LY_DEF_ROS_TOPIC(ly_ra_angle_image, "/ly/ra/angle_image", auto_aim_common::msg::AngleImage);
 
@@ -307,6 +310,30 @@ private:
         //     msg.data = *reinterpret_cast<const std::uint8_t *>(&firecode);
         //     Node.Publisher<topic>().publish(msg);
         // }
+    }
+
+    void PubDebug(
+        bool status,
+        int mode,
+        const gimbal_driver::msg::GimbalAngles& setpoint,
+        const cv::Point3f& target_robot_mm,
+        double rotation_angle,
+        double distance_m,
+        double height_m) {
+        using topic = ly_buff_debug;
+        topic::Msg msg;
+        msg.header.stamp = Node.now();
+        msg.status = status;
+        msg.mode = static_cast<std::uint8_t>(std::clamp(mode, 0, 255));
+        msg.target_yaw = static_cast<float>(setpoint.yaw);
+        msg.target_pitch = static_cast<float>(setpoint.pitch);
+        msg.rotation_angle = static_cast<float>(rotation_angle);
+        msg.distance_m = static_cast<float>(distance_m);
+        msg.height_m = static_cast<float>(height_m);
+        msg.target_x_m = static_cast<float>(target_robot_mm.x * 1e-3);
+        msg.target_y_m = static_cast<float>(target_robot_mm.y * 1e-3);
+        msg.target_z_m = static_cast<float>(target_robot_mm.z * 1e-3);
+        Node.Publisher<topic>()->publish(msg);
     }
 
 public:
@@ -760,6 +787,7 @@ public:
                 last_var.buffHitterShoot = false;
                 last_var.buff_follow = true;
                 PubData(last_var.buffHitterShoot, last_var.GimbalAngles);
+                PubDebug(false, buff_mode_, last_var.GimbalAngles, cv::Point3f{}, 0.0, 0.0, 0.0);
             } else {
                 const bool shoot_cmd_now = (control_result.shoot_flag != 0);
                 if (dual_target_active_ && !switch_to_second_ && !prev_shoot_cmd_ && shoot_cmd_now) {
@@ -778,6 +806,14 @@ public:
                 copy.pitch = control_result.pitch_setpoint;
                 copy.yaw = control_result.yaw_setpoint;
                 PubData(last_var.buffHitterShoot, copy);
+                PubDebug(
+                    true,
+                    buff_mode_,
+                    copy,
+                    buff_calculator().getPredictRobot(),
+                    buff_calculator().getPredictRotationAngle(),
+                    buff_calculator().getPredictDistanceM(),
+                    buff_calculator().getPredictHeightM());
             }
         }
         else
@@ -786,6 +822,7 @@ public:
             last_var.buffHitterShoot = false;
             last_var.buff_follow = true;
             PubData(last_var.buffHitterShoot, last_var.GimbalAngles);
+            PubDebug(false, buff_mode_, last_var.GimbalAngles, cv::Point3f{}, 0.0, 0.0, 0.0);
         }
         
         std::this_thread::sleep_for(1ms);  // 避免 busy loop

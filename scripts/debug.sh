@@ -21,6 +21,7 @@ Entries:
   navi-goal-cli         Interactive /ly/navi/goal publisher.
   ballistic-log         /rosout ballistic log filter.
   shooting-table-calib  Shooting table calibration/debug.
+  buff-shooting-table-calib  Buff shooting-table calibration/debug.
   control-angles-test    Publish one /ly/control/angles GimbalAngles command.
   rotate_level          /ly/control/firecode rotate level cycle test.
   move_rotate           Rotate + /ly/control/vel sine-translate test.
@@ -59,19 +60,22 @@ run_entry() {
     7|shooting-table|shooting_table|shooting-table-calib|shooting_table_calib|calib)
       exec "${ROOT_DIR}/debug/shooting_table_calib.sh" "$@"
       ;;
-    8|control-angles-test|control_angles_test|control-angles|control_angles)
+    8|buff-shooting-table-calib|buff_shooting_table_calib|buff-calib|buff_calib)
+      exec "${ROOT_DIR}/debug/buff_shooting_table_calib.sh" "$@"
+      ;;
+    9|control-angles-test|control_angles_test|control-angles|control_angles)
       exec "${ROOT_DIR}/debug/control_angles_test.sh" "$@"
       ;;
-    9|rotate-level|rotate_level)
+    10|rotate-level|rotate_level)
       exec "${ROOT_DIR}/debug/rotate_level.sh" "$@"
       ;;
-    10|move-rotate|move_rotate)
+    11|move-rotate|move_rotate)
       exec "${ROOT_DIR}/debug/move_rotate.sh" "$@"
       ;;
-    11|posture-test|posture_test|posture)
+    12|posture-test|posture_test|posture)
       exec "${ROOT_DIR}/debug/posture_test.sh" "$@"
       ;;
-    12|chase-only|chase_only|chase)
+    13|chase-only|chase_only|chase)
       exec "${ROOT_DIR}/debug/chase_only.sh" "$@"
       ;;
     ""|menu)
@@ -101,11 +105,12 @@ echo "  4) navi_goal"
 echo "  5) navi-goal-cli"
 echo "  6) ballistic-log"
 echo "  7) shooting-table-calib"
-echo "  8) control-angles-test"
-echo "  9) rotate_level"
-echo " 10) move_rotate"
-echo " 11) posture-test"
-echo " 12) chase-only"
-read -r -p "Input 1-12 [default: 1]: " choice
+echo "  8) buff-shooting-table-calib"
+echo "  9) control-angles-test"
+echo " 10) rotate_level"
+echo " 11) move_rotate"
+echo " 12) posture-test"
+echo " 13) chase-only"
+read -r -p "Input 1-13 [default: 1]: " choice
 choice="${choice:-1}"
 run_entry "${choice}"

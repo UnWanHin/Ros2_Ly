@@ -26,6 +26,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CarTracker.msg"
   "msg/Trackers.msg"
   "msg/AngleImage.msg"
+  "msg/BuffDebug.msg"
   "msg/PredictorArmorVis.msg"
   "msg/PredictorCarVis.msg"
   "msg/PredictorVis.msg"

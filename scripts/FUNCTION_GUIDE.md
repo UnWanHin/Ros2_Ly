@@ -402,9 +402,24 @@ scripts/
 - 标定射表
 - 人工微调落点
 
-### 18. 射表直连 autoaim 验证
+### 18. 打符射表标定
 
-该入口已下线（为减少入口重复），统一保留 `shooting-table-calib`。
+```bash
+./scripts/debug.sh buff-shooting-table-calib --calib-mode periodic --csv-strategy latest
+```
+
+适合：
+
+- 采集打符开火时刻的预测特征（角度/距离/高度/旋转角）
+- 离线拟合 `buff_config` 的静态和周期补偿参数
+- 不接管比赛控制接口，只做标定插件采样
+
+常用离线拟合：
+
+```bash
+./scripts/launch/buff_shooting_table_calib.sh --fit-static-latest
+./scripts/launch/buff_shooting_table_calib.sh --fit-periodic-latest
+```
 
 ---
 
