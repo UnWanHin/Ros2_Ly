@@ -95,7 +95,7 @@ namespace BehaviorTree {
             // 桥接到 gimbal_driver 控制口，恢复 navi->BT->control_vel 老链路。
             pub_gimbal_vel_->publish(msg);
             // 兼容保留：继续发布到 /ly/navi/vel，避免影响外部联调工具。
-            pub_navi_vel_->publish(msg);
+            // pub_navi_vel_->publish(msg);
         }
     }
 

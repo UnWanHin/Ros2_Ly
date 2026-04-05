@@ -117,7 +117,7 @@ namespace BehaviorTree {
         static constexpr auto delta_yaw = 1.0f;
         static constexpr auto buff_yaw = -50.0f + 360.0f;
         static constexpr auto kPatrolScanYawStep = 15.0f * delta_yaw;
-        static constexpr auto kPatrolScanYawBoostStep = 20.0f * delta_yaw;
+        static constexpr auto kPatrolScanYawBoostStep = 15.0f * delta_yaw;
         static constexpr int kDamageScanBoostWindowMs = 1300;
         static constexpr int kDamageScanYawPhaseMs = 160;
 
