@@ -35,8 +35,10 @@ Applied items:
 - `src/buff_hitter/module/BuffDetector.hpp`
 - `src/buff_hitter/src/BuffDetector.cpp`
 - `src/buff_hitter/src/BuffController.cpp`
-- `scripts/config/auto_aim_config_competition.yaml`
-- `src/detector/config/auto_aim_config.yaml`
+- `scripts/config/base_config.yaml`
+- `scripts/config/override_config.yaml`
+- `src/detector/config/detector_config.yaml`
+- `src/predictor/config/predictor_config.yaml`
 
 ## Detailed Changes
 

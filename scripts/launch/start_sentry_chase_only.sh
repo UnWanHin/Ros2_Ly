@@ -12,12 +12,12 @@ USE_NOGATE=1
 OFFLINE_MODE=0
 MODE_ARG="league"
 LAUNCH_ARGS=()
-DEFAULT_BASE_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/base_competition.yaml"
-DEFAULT_DETECTOR_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/detector_competition.yaml"
-DEFAULT_PREDICTOR_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/predictor_competition.yaml"
-DEFAULT_OUTPOST_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/outpost_competition.yaml"
-DEFAULT_BUFF_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/buff_competition.yaml"
-DEFAULT_OVERRIDE_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/override_none.yaml"
+DEFAULT_BASE_CONFIG_FILE="${ROOT_DIR}/config/base_config.yaml"
+DEFAULT_DETECTOR_CONFIG_FILE="${ROOT_DIR}/src/detector/config/detector_config.yaml"
+DEFAULT_PREDICTOR_CONFIG_FILE="${ROOT_DIR}/src/predictor/config/predictor_config.yaml"
+DEFAULT_OUTPOST_CONFIG_FILE="${ROOT_DIR}/src/outpost_hitter/config/outpost_config.yaml"
+DEFAULT_BUFF_CONFIG_FILE="${ROOT_DIR}/src/buff_hitter/config/buff_config.yaml"
+DEFAULT_OVERRIDE_CONFIG_FILE="${ROOT_DIR}/config/override_config.yaml"
 
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/lib/ros_launch_common.sh"

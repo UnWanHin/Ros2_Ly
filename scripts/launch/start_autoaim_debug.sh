@@ -9,10 +9,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_NAME="$(basename "$0")"
 LOCK_FILE="/tmp/sentry_autoaim_debug.lock"
-DEFAULT_BASE_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/base_competition.yaml"
-DEFAULT_DETECTOR_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/detector_competition.yaml"
-DEFAULT_PREDICTOR_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/predictor_competition.yaml"
-DEFAULT_OVERRIDE_CONFIG_FILE="${ROOT_DIR}/scripts/config/stack/override_none.yaml"
+DEFAULT_BASE_CONFIG_FILE="${ROOT_DIR}/config/base_config.yaml"
+DEFAULT_DETECTOR_CONFIG_FILE="${ROOT_DIR}/src/detector/config/detector_config.yaml"
+DEFAULT_PREDICTOR_CONFIG_FILE="${ROOT_DIR}/src/predictor/config/predictor_config.yaml"
+DEFAULT_OVERRIDE_CONFIG_FILE="${ROOT_DIR}/config/override_config.yaml"
 
 : "${ROS_LOG_DIR:=/tmp/ros2_logs}"
 mkdir -p "${ROS_LOG_DIR}"
@@ -100,7 +100,7 @@ Examples:
   ./${SCRIPT_NAME} --mode fire --offline --angles-topic /ly/control/angles --firecode-topic /ly/control/firecode
   ./${SCRIPT_NAME} --mode mapper --publish-team true --red true
   ./${SCRIPT_NAME} --online
-  ./${SCRIPT_NAME} --online --config-file /abs/path/auto_aim_config_competition.yaml
+  ./${SCRIPT_NAME} --online --config-file /abs/path/override_config.yaml
 EOF
 }
 

@@ -291,7 +291,8 @@ void TreeTick() {
 - `./scripts/start.sh gated`
   - 啟動時會交互選擇 `league/regional`（或直接傳 `--mode`）
   - 腳本會自動對齊 `competition_profile` 與 `bt_config_file`
-  - `config_file` 默認注入 `scripts/config/auto_aim_config_competition.yaml`，只在顯式傳入時覆蓋
+  - 默認分層注入：`scripts/config/base_config.yaml` + `src/*/config/*_config.yaml` + `scripts/config/override_config.yaml`
+  - `config_file` 只作為最後覆蓋層，顯式傳入時覆蓋 `override_config.yaml`
 - `./scripts/start.sh gated --mode league`
   - 非交互固定聯盟賽
 - `./scripts/start.sh gated --mode regional`

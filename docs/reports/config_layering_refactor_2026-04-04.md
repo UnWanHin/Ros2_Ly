@@ -11,18 +11,23 @@ Refactor startup/config architecture from a single shared `config_file` into lay
 Keep backward compatibility:
 
 - `config_file:=<yaml>` still works as the final override layer.
-- legacy combined file `scripts/config/auto_aim_config_competition.yaml` is still kept.
 
 ## 2. New Config Layout
 
 Added:
 
-- `scripts/config/stack/base_competition.yaml`
-- `scripts/config/stack/detector_competition.yaml`
-- `scripts/config/stack/predictor_competition.yaml`
-- `scripts/config/stack/outpost_competition.yaml`
-- `scripts/config/stack/buff_competition.yaml`
-- `scripts/config/stack/override_none.yaml`
+- `scripts/config/base_config.yaml`
+- `scripts/config/override_config.yaml`
+- `src/detector/config/detector_config.yaml`
+- `src/predictor/config/predictor_config.yaml`
+- `src/outpost_hitter/config/outpost_config.yaml`
+- `src/buff_hitter/config/buff_config.yaml`
+
+Removed:
+
+- `scripts/config/stack/*`
+- `scripts/config/auto_aim_config_competition.yaml`
+- `scripts/config/auto_aim_config_competition.yamlx`
 
 ## 3. Launch Injection Priority
 
@@ -43,7 +48,11 @@ Main chain (`sentry_all`) per-node injection:
 
 ## 4. Startup Script Changes
 
-Updated scripts now default-inject layered configs from `scripts/config/stack/*`:
+Updated scripts now default-inject layered configs from:
+
+- `scripts/config/base_config.yaml`
+- `scripts/config/override_config.yaml`
+- module configs under `src/*/config/*_config.yaml`
 
 - `scripts/launch/start_sentry_all.sh`
 - `scripts/launch/start_sentry_showcase.sh`
@@ -103,11 +112,11 @@ So launch defaults can resolve layered config files from installed package paths
 
 Updated `scripts/selfcheck/sentry.sh`:
 
-- static checks include new stack config files
+- static checks include base/override + module config files
 - launch mode hints now inspect split base/detector config files
 - camera SN consistency check switched to base config
 
 ## 8. Notes
 
 - Existing user workflows that pass `config_file:=...` remain available.
-- Recommended new workflow is to edit module-specific files under `scripts/config/stack/`.
+- Recommended new workflow is to edit module-specific files under each package `src/<module>/config/`.

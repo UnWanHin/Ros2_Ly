@@ -27,16 +27,15 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     try:
         behavior_tree_share = get_package_share_directory("behavior_tree")
-        config_root = os.path.join(behavior_tree_share, "config", "stack")
-        default_base_config_file = os.path.join(config_root, "base_competition.yaml")
-        default_outpost_config_file = os.path.join(config_root, "outpost_competition.yaml")
-        default_override_config_file = os.path.join(config_root, "override_none.yaml")
+        outpost_share = get_package_share_directory("outpost_hitter")
+        config_root = os.path.join(behavior_tree_share, "config")
+        default_base_config_file = os.path.join(config_root, "base_config.yaml")
+        default_override_config_file = os.path.join(config_root, "override_config.yaml")
+        default_outpost_config_file = os.path.join(outpost_share, "config", "outpost_config.yaml")
     except Exception:
-        detector_share = get_package_share_directory("detector")
-        legacy_default = os.path.join(detector_share, "config", "auto_aim_config.yaml")
-        default_base_config_file = legacy_default
-        default_outpost_config_file = legacy_default
-        default_override_config_file = legacy_default
+        default_base_config_file = "config/base_config.yaml"
+        default_outpost_config_file = "src/outpost_hitter/config/outpost_config.yaml"
+        default_override_config_file = "config/override_config.yaml"
 
     config_file = LaunchConfiguration("config_file")
     base_config_file = LaunchConfiguration("base_config_file")

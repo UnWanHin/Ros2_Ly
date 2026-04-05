@@ -30,18 +30,18 @@ def generate_launch_description():
     # 分层配置：base + module + optional global override(config_file)
     try:
         behavior_tree_share = get_package_share_directory("behavior_tree")
-        config_root = os.path.join(behavior_tree_share, "config", "stack")
-        default_base_config_file = os.path.join(config_root, "base_competition.yaml")
-        default_detector_config_file = os.path.join(config_root, "detector_competition.yaml")
-        default_predictor_config_file = os.path.join(config_root, "predictor_competition.yaml")
-        default_override_config_file = os.path.join(config_root, "override_none.yaml")
-    except Exception:
         detector_share = get_package_share_directory("detector")
-        legacy_default = os.path.join(detector_share, "config", "auto_aim_config.yaml")
-        default_base_config_file = legacy_default
-        default_detector_config_file = legacy_default
-        default_predictor_config_file = legacy_default
-        default_override_config_file = legacy_default
+        predictor_share = get_package_share_directory("predictor")
+        config_root = os.path.join(behavior_tree_share, "config")
+        default_base_config_file = os.path.join(config_root, "base_config.yaml")
+        default_override_config_file = os.path.join(config_root, "override_config.yaml")
+        default_detector_config_file = os.path.join(detector_share, "config", "detector_config.yaml")
+        default_predictor_config_file = os.path.join(predictor_share, "config", "predictor_config.yaml")
+    except Exception:
+        default_base_config_file = "config/base_config.yaml"
+        default_detector_config_file = "src/detector/config/detector_config.yaml"
+        default_predictor_config_file = "src/predictor/config/predictor_config.yaml"
+        default_override_config_file = "config/override_config.yaml"
 
     config_file = LaunchConfiguration("config_file")
     base_config_file = LaunchConfiguration("base_config_file")

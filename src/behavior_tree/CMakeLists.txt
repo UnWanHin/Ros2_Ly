@@ -243,8 +243,8 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/launch")
   )
 endif()
 
-if(EXISTS "${BTCPP_WS_ROOT_DIR}/scripts/config")
-  install(DIRECTORY "${BTCPP_WS_ROOT_DIR}/scripts/config/"
+if(EXISTS "${BTCPP_WS_ROOT_DIR}/config")
+  install(DIRECTORY "${BTCPP_WS_ROOT_DIR}/config/"
     DESTINATION share/${PROJECT_NAME}/config
   )
 endif()

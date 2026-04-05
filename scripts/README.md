@@ -37,13 +37,15 @@ scripts/
 ├── launch/                  # 真实启动实现
 ├── feature_test/            # 单项功能测试框架
 ├── tools/                   # 工具脚本
-└── config/                  # 比赛/测试配置
+└── config/                  # 根层配置（base + override）
 ```
 
 原则：
 
 - `scripts/start/`、`scripts/debug/`、`scripts/selfcheck/` 是你平时真正需要打开的分类入口。
 - `scripts/launch/` 是实现层，不是给人记命令用的。
+- 根层 `config/` 只放 `base_config.yaml` 和 `override_config.yaml`。
+- 功能测试配置放在 `scripts/feature_test/config/`。
 - 旧的根目录壳脚本已经删掉，避免同一件事出现两三个名字。
 
 ## 一眼看懂
@@ -82,7 +84,7 @@ scripts/
 
 默认行为：
 
-- 使用分层配置（`scripts/config/stack/base_competition.yaml` + `detector_competition.yaml` + `predictor_competition.yaml`，并叠加 `override_none.yaml`）
+- 使用分层配置（`config/base_config.yaml` + `src/detector/config/detector_config.yaml` + `src/predictor/config/predictor_config.yaml`，并叠加 `config/override_config.yaml`）
 - 默认 `--mode regional`
 - 默认 `--nogate`
 - 默认启用：`gimbal_driver / detector / tracker_solver / predictor / behavior_tree`

@@ -39,7 +39,7 @@
 
 - 檔案：`src/buff_hitter/config/config.json`
 - `buff_hitter` 仍以這個 JSON 為基礎配置，但已支持 `buff_config.*` 的 YAML 覆蓋層（由 launch 注入）。
-- 建議：常改項先放 `scripts/config/stack/buff_competition.yaml`；基礎模板保留在 JSON。
+- 建議：常改項先放 `src/buff_hitter/config/buff_config.yaml`；基礎模板保留在 JSON。
 
 ### C. 不在配置檔，需改代碼重編譯
 

@@ -121,7 +121,7 @@ pkill -f "gimbal_driver_node"
 ```bash
 ./scripts/debug.sh shooting-table-calib --fit-latest
 ./scripts/debug.sh shooting-table-calib --fit-latest \
-  --write-config scripts/config/auto_aim_config_competition.yaml
+  --write-config src/predictor/config/predictor_config.yaml
 ```
 
 如果你想“退出后自动拟合当前这一轮 CSV”，再显式打开：

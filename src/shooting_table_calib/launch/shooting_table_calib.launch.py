@@ -26,12 +26,13 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     detector_share = get_package_share_directory("detector")
+    predictor_share = get_package_share_directory("predictor")
     behavior_tree_share = get_package_share_directory("behavior_tree")
-    config_root = os.path.join(behavior_tree_share, "config", "stack")
-    default_base_config_file = os.path.join(config_root, "base_competition.yaml")
-    default_detector_config_file = os.path.join(config_root, "detector_competition.yaml")
-    default_predictor_config_file = os.path.join(config_root, "predictor_competition.yaml")
-    default_override_config_file = os.path.join(config_root, "override_none.yaml")
+    config_root = os.path.join(behavior_tree_share, "config")
+    default_base_config_file = os.path.join(config_root, "base_config.yaml")
+    default_override_config_file = os.path.join(config_root, "override_config.yaml")
+    default_detector_config_file = os.path.join(detector_share, "config", "detector_config.yaml")
+    default_predictor_config_file = os.path.join(predictor_share, "config", "predictor_config.yaml")
 
     config_file = LaunchConfiguration("config_file")
     base_config_file = LaunchConfiguration("base_config_file")

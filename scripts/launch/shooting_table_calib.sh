@@ -29,11 +29,11 @@ RECORD_DIR="${DEFAULT_RECORD_DIR}"
 BASE_CONFIG_FILE=""
 DETECTOR_CONFIG_FILE=""
 PREDICTOR_CONFIG_FILE=""
-DEFAULT_BASE_CONFIG="${ROOT_DIR}/scripts/config/stack/base_competition.yaml"
-DEFAULT_DETECTOR_CONFIG="${ROOT_DIR}/scripts/config/stack/detector_competition.yaml"
-DEFAULT_PREDICTOR_CONFIG="${ROOT_DIR}/scripts/config/stack/predictor_competition.yaml"
-DEFAULT_OVERRIDE_CONFIG="${ROOT_DIR}/scripts/config/stack/override_none.yaml"
-DEFAULT_WRITE_CONFIG="${ROOT_DIR}/scripts/config/stack/predictor_competition.yaml"
+DEFAULT_BASE_CONFIG="${ROOT_DIR}/config/base_config.yaml"
+DEFAULT_DETECTOR_CONFIG="${ROOT_DIR}/src/detector/config/detector_config.yaml"
+DEFAULT_PREDICTOR_CONFIG="${ROOT_DIR}/src/predictor/config/predictor_config.yaml"
+DEFAULT_OVERRIDE_CONFIG="${ROOT_DIR}/config/override_config.yaml"
+DEFAULT_WRITE_CONFIG="${ROOT_DIR}/src/predictor/config/predictor_config.yaml"
 AUTO_FIT_EXPLICIT=0
 WRITE_CONFIG_EXPLICIT=0
 DISABLE_DEFAULT_WRITE_CONFIG=0
@@ -78,8 +78,8 @@ Examples:
   ./${SCRIPT_NAME} --team blue --web-show false
   ./${SCRIPT_NAME} --config /path/to/global_override.yaml
   ./${SCRIPT_NAME}
-  ./${SCRIPT_NAME} --fit-latest --write-config scripts/config/stack/predictor_competition.yaml
-  ./${SCRIPT_NAME} --auto-fit --write-config scripts/config/stack/predictor_competition.yaml
+  ./${SCRIPT_NAME} --fit-latest --write-config src/predictor/config/predictor_config.yaml
+  ./${SCRIPT_NAME} --auto-fit --write-config src/predictor/config/predictor_config.yaml
   ./${SCRIPT_NAME} --param-manager-cmd "bash /home/liu/workspace/scripts/param_manager.bash"
 EOF
 }

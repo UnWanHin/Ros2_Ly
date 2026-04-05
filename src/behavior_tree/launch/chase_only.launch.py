@@ -15,14 +15,18 @@ from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
     behavior_tree_share = get_package_share_directory("behavior_tree")
+    detector_share = get_package_share_directory("detector")
+    predictor_share = get_package_share_directory("predictor")
+    outpost_share = get_package_share_directory("outpost_hitter")
+    buff_share = get_package_share_directory("buff_hitter")
     sentry_all_launch = os.path.join(behavior_tree_share, "launch", "sentry_all.launch.py")
-    config_root = os.path.join(behavior_tree_share, "config", "stack")
-    default_base_config_file = os.path.join(config_root, "base_competition.yaml")
-    default_detector_config_file = os.path.join(config_root, "detector_competition.yaml")
-    default_predictor_config_file = os.path.join(config_root, "predictor_competition.yaml")
-    default_outpost_config_file = os.path.join(config_root, "outpost_competition.yaml")
-    default_buff_config_file = os.path.join(config_root, "buff_competition.yaml")
-    default_override_config_file = os.path.join(config_root, "override_none.yaml")
+    config_root = os.path.join(behavior_tree_share, "config")
+    default_base_config_file = os.path.join(config_root, "base_config.yaml")
+    default_override_config_file = os.path.join(config_root, "override_config.yaml")
+    default_detector_config_file = os.path.join(detector_share, "config", "detector_config.yaml")
+    default_predictor_config_file = os.path.join(predictor_share, "config", "predictor_config.yaml")
+    default_outpost_config_file = os.path.join(outpost_share, "config", "outpost_config.yaml")
+    default_buff_config_file = os.path.join(buff_share, "config", "buff_config.yaml")
 
     launch_args = [
         DeclareLaunchArgument("mode", default_value="league"),
