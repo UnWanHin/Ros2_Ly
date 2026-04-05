@@ -193,7 +193,7 @@ namespace BehaviorTree {
                 rotate_under_fire = true;
                 rotate_ramp_start_time = rotate_now;
             }
-            rotateTimerClock.tick()
+            rotateTimerClock.tick();
         }
 
         bool in_damage_rotate_window = false;
@@ -638,9 +638,12 @@ namespace BehaviorTree {
             if(naviCommandGoal == LangYa::HoleRoad(EnemyTeam)) { // 英雄点位1
                 if(BehaviorTree::Area::HoleRoad.near(nowx, nowy, 100, MyTeam)) {
                     targetArmor.Type = ArmorType::Hero;
+                    targetArmor.Distance = enemyRobots[UnitType::Hero].distance_;
                 } else {
                     SetAimTargetNormal();
                 }
+            } else {
+                SetAimTargetNormal();
             }
             LoggerPtr->Info("Target: {}", static_cast<int>(targetArmor.Type));
         }
