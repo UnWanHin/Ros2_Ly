@@ -28,16 +28,16 @@
     "detector_config/use_video": false
 
     # 8081 overlay controls
-    "detector_config.overlay_predictor_center": false
-    "detector_config/overlay_predictor_center": false
-    "detector_config.overlay_predictor_full": false
-    "detector_config/overlay_predictor_full": false
-    "detector_config.overlay_predictor_text": false
-    "detector_config/overlay_predictor_text": false
+    "detector_config.overlay_predictor_center": true
+    "detector_config/overlay_predictor_center": true
+    "detector_config.overlay_predictor_full": true
+    "detector_config/overlay_predictor_full": true
+    "detector_config.overlay_predictor_text": true
+    "detector_config/overlay_predictor_text": true
     "detector_config.overlay_predictor_timeout_ms": 120
     "detector_config/overlay_predictor_timeout_ms": 120
-    "detector_config.overlay_buff_text": false
-    "detector_config/overlay_buff_text": false
+    "detector_config.overlay_buff_text": true
+    "detector_config/overlay_buff_text": true
     "detector_config.overlay_buff_show_position": false
     "detector_config/overlay_buff_show_position": false
     "detector_config.overlay_buff_timeout_ms": 150
