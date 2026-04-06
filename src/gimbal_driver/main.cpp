@@ -20,7 +20,7 @@
 #include <rclcpp/executors.hpp>
 
 #include "gimbal_driver/msg/gimbal_angles.hpp"
-#include "gimbal_driver/msg/gimbal_vel.hpp"
+#include "gimbal_driver/msg/gimbal_yaw.hpp"
 #include "gimbal_driver/msg/uwb_pos.hpp"
 #include "gimbal_driver/msg/vel.hpp"
 #include "gimbal_driver/msg/health.hpp"
@@ -51,7 +51,7 @@ namespace
     LY_DEF_ROS_TOPIC(ly_gimbal_angles, "/ly/gimbal/angles", gimbal_driver::msg::GimbalAngles);
     LY_DEF_ROS_TOPIC(ly_gimbal_firecode, "/ly/gimbal/firecode", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_gimbal_vel, "/ly/gimbal/vel", gimbal_driver::msg::Vel);
-    LY_DEF_ROS_TOPIC(ly_gimbal_gimbal_vel, "/ly/gimbal/gimbal_vel", gimbal_driver::msg::GimbalVel);
+    LY_DEF_ROS_TOPIC(ly_gimbal_gimbal_yaw, "/ly/gimbal/gimbal_yaw", gimbal_driver::msg::GimbalYaw);
     LY_DEF_ROS_TOPIC(ly_gimbal_posture, "/ly/gimbal/posture", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_gimbal_capV, "/ly/gimbal/capV", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_game_eventdata, "ly/gimbal/eventdata", std_msgs::msg::UInt32);
@@ -109,9 +109,9 @@ namespace
             return posture >= 1 && posture <= 3;
         }
 
-        struct DecodedGimbalVel {
-            std::int16_t YawRaw{0};
-            std::int16_t PitchRaw{0};
+        struct DecodedGimbalYaw {
+            std::int16_t YawVelRaw{0};
+            std::int16_t YawAngleRaw{0};
         };
 
         static std::int16_t DecodeInt16LittleEndian(const std::uint8_t low, const std::uint8_t high) noexcept {
@@ -120,14 +120,13 @@ namespace
                 (static_cast<std::uint16_t>(high) << 8));
         }
 
-        static DecodedGimbalVel DecodeGimbalVelFromReserve32(const std::uint32_t& reserve_32_1) noexcept {
+        static DecodedGimbalYaw DecodeGimbalYawFromReserve32(const std::uint32_t& reserve_32_1) noexcept {
             // Reserve_32_1 byte layout (little-endian):
-            // [0]=yaw low8, [1]=yaw high8, [2]=pitch low8, [3]=pitch high8
+            // [0]=yaw_vel low8, [1]=yaw_vel high8, [2]=yaw_angle low8, [3]=yaw_angle high8
             const auto* bytes = reinterpret_cast<const std::uint8_t*>(&reserve_32_1);
-            return DecodedGimbalVel{
+            return DecodedGimbalYaw{
                 DecodeInt16LittleEndian(bytes[0], bytes[1]),
-                DecodeInt16LittleEndian(bytes[2], bytes[3])
-            };
+                DecodeInt16LittleEndian(bytes[2], bytes[3])};
         }
 
         static std::uint8_t DecodePostureFromReserve16(std::uint16_t reserve16) noexcept {
@@ -480,11 +479,11 @@ namespace
                 Node.Publisher<topic>()->publish(msg);
             }
             {
-                const auto decoded = DecodeGimbalVelFromReserve32(data.Reserve_32_1);
-                using topic = ly_gimbal_gimbal_vel;
+                const auto decoded = DecodeGimbalYawFromReserve32(data.Reserve_32_1);
+                using topic = ly_gimbal_gimbal_yaw;
                 topic::Msg msg;
-                msg.yaw = decoded.YawRaw;
-                msg.pitch = decoded.PitchRaw;
+                msg.yaw_vel = decoded.YawVelRaw;
+                msg.yaw_angle = decoded.YawAngleRaw;
                 Node.Publisher<topic>()->publish(msg);
             }
 
