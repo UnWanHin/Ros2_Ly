@@ -565,7 +565,7 @@ namespace
 
                         static auto last_extend_dump_time = std::chrono::steady_clock::time_point{};
                         const auto now = std::chrono::steady_clock::now();
-                        if (now - last_extend_dump_time > std::chrono::milliseconds(200)) {
+                        if (now - last_extend_dump_time > std::chrono::milliseconds(50)) {
                             last_extend_dump_time = now;
                             constexpr float kScale = 0.01f;
                             const auto reserve_32_1_b0 = static_cast<unsigned int>(m.Data[4]);
@@ -583,6 +583,13 @@ namespace
                                 reserve_32_1_bin.substr(24, 8);
                             const auto reserve_32_1_low16_bin = std::bitset<16>(reserve_32_1_low16).to_string();
                             const auto reserve_32_1_high16_bin = std::bitset<16>(reserve_32_1_high16).to_string();
+                            const auto reserve_32_2_u32 = static_cast<std::uint32_t>(extend_data.Reserve_32_2);
+                            const auto reserve_32_2_low16_u = static_cast<std::uint16_t>(reserve_32_2_u32 & 0xFFFFu);
+                            const auto reserve_32_2_high16_u = static_cast<std::uint16_t>((reserve_32_2_u32 >> 16) & 0xFFFFu);
+                            const auto reserve_32_2_low16_i = static_cast<std::int16_t>(reserve_32_2_low16_u);
+                            const auto reserve_32_2_high16_i = static_cast<std::int16_t>(reserve_32_2_high16_u);
+                            const auto reserve_32_2_low16_bin = std::bitset<16>(reserve_32_2_low16_u).to_string();
+                            const auto reserve_32_2_high16_bin = std::bitset<16>(reserve_32_2_high16_u).to_string();
                             const auto posture_high8 =
                                 static_cast<unsigned int>((extend_data.Reserve_16 >> 8) & 0xFFu);
                             roslog::info(
@@ -597,7 +604,9 @@ namespace
                                 "ExtendData parse: uwb_yaw=%u reserve16=0x%04X posture_high8=%u reserve32_1=0x%08X "
                                 "bytes[%02X %02X %02X %02X] reserve32_1_bin=%s "
                                 "low16_bin=%s high16_bin=%s -> yaw_vel_raw=%d yaw_angle_raw=%d "
-                                "yaw_vel_deg_s=%.2f yaw_angle_deg=%.2f reserve32_2=0x%08X",
+                                "yaw_vel_deg_s=%.2f yaw_angle_deg=%.2f reserve32_2=0x%08X "
+                                "reserve32_2_low16_raw=%d reserve32_2_low16_bin=%s reserve32_2_low16_x0p01=%.2f "
+                                "reserve32_2_high16_raw=%d reserve32_2_high16_bin=%s reserve32_2_high16_x0p01=%.2f",
                                 static_cast<unsigned int>(extend_data.UWBAngleYaw),
                                 static_cast<unsigned int>(extend_data.Reserve_16),
                                 posture_high8,
@@ -610,7 +619,13 @@ namespace
                                 static_cast<int>(decoded.YawAngleRaw),
                                 static_cast<double>(decoded.YawVelRaw) * kScale,
                                 static_cast<double>(decoded.YawAngleRaw) * kScale,
-                                static_cast<unsigned int>(extend_data.Reserve_32_2));
+                                static_cast<unsigned int>(extend_data.Reserve_32_2),
+                                static_cast<int>(reserve_32_2_low16_i),
+                                reserve_32_2_low16_bin.c_str(),
+                                static_cast<double>(reserve_32_2_low16_i) * kScale,
+                                static_cast<int>(reserve_32_2_high16_i),
+                                reserve_32_2_high16_bin.c_str(),
+                                static_cast<double>(reserve_32_2_high16_i) * kScale);
                         }
 
                         PubExtendData(extend_data);
