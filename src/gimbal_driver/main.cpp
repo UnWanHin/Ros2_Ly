@@ -16,7 +16,6 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
-#include <bitset>
 #include <cmath>
 #include <rclcpp/utilities.hpp>
 #include <rclcpp/executors.hpp>
@@ -513,34 +512,6 @@ namespace
                     case GameData::TypeID:
                     {
                         const auto& game_data = m.GetDataAs<GameData>();
-                        static auto last_game_dump_time = std::chrono::steady_clock::time_point{};
-                        const auto now = std::chrono::steady_clock::now();
-                        if (now - last_game_dump_time > std::chrono::milliseconds(200)) {
-                            last_game_dump_time = now;
-                            const auto self_health_swapped = static_cast<std::uint16_t>(
-                                (game_data.SelfHealth >> 8) | (game_data.SelfHealth << 8));
-                            const auto self_health_publish = game_data.SelfHealth;
-                            roslog::info(
-                                "GameData selfhealth parse: raw_field=%u publish=%u swapped_candidate=%u",
-                                static_cast<unsigned int>(game_data.SelfHealth),
-                                static_cast<unsigned int>(self_health_publish),
-                                static_cast<unsigned int>(self_health_swapped));
-                            roslog::info(
-                                "RX GameData raw[12]=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X | "
-                                "parsed gamecode=0x%04X ammo=%u time=%u self=%u self_swapped=%u ext=0x%08X",
-                                static_cast<unsigned int>(m.Data[0]), static_cast<unsigned int>(m.Data[1]),
-                                static_cast<unsigned int>(m.Data[2]), static_cast<unsigned int>(m.Data[3]),
-                                static_cast<unsigned int>(m.Data[4]), static_cast<unsigned int>(m.Data[5]),
-                                static_cast<unsigned int>(m.Data[6]), static_cast<unsigned int>(m.Data[7]),
-                                static_cast<unsigned int>(m.Data[8]), static_cast<unsigned int>(m.Data[9]),
-                                static_cast<unsigned int>(m.Data[10]), static_cast<unsigned int>(m.Data[11]),
-                                static_cast<unsigned int>(*reinterpret_cast<const std::uint16_t*>(&game_data.GameCode)),
-                                static_cast<unsigned int>(game_data.AmmoLeft),
-                                static_cast<unsigned int>(game_data.TimeLeft),
-                                static_cast<unsigned int>(game_data.SelfHealth),
-                                static_cast<unsigned int>(self_health_swapped),
-                                static_cast<unsigned int>(game_data.ExtEventData));
-                        }
                         PubGameData(game_data);
                         break;
                     }
@@ -565,19 +536,15 @@ namespace
                         const auto& extend_data = m.GetDataAs<ExtendData>();
                         constexpr float kScale = 0.01f;
                         constexpr float kVelFilterAlpha = 0.30f;
+                        constexpr float kVelDecayWhenNoInstant = 0.70f;
+                        constexpr float kVelDeadbandDegPerSec = 0.20f;
                         const auto reserve_32_1_u32 = static_cast<std::uint32_t>(extend_data.Reserve_32_1);
-                        const auto reserve_32_1_low16_u = static_cast<std::uint16_t>(reserve_32_1_u32 & 0xFFFFu);
                         const auto reserve_32_1_high16_u =
                             static_cast<std::uint16_t>((reserve_32_1_u32 >> 16) & 0xFFFFu);
-                        const auto reserve_32_1_low16_i = static_cast<std::int16_t>(reserve_32_1_low16_u);
                         const auto reserve_32_1_high16_i = static_cast<std::int16_t>(reserve_32_1_high16_u);
 
                         const auto reserve_32_2_u32 = static_cast<std::uint32_t>(extend_data.Reserve_32_2);
                         const auto reserve_32_2_low16_u = static_cast<std::uint16_t>(reserve_32_2_u32 & 0xFFFFu);
-                        const auto reserve_32_2_high16_u =
-                            static_cast<std::uint16_t>((reserve_32_2_u32 >> 16) & 0xFFFFu);
-                        const auto reserve_32_2_low16_i = static_cast<std::int16_t>(reserve_32_2_low16_u);
-                        const auto reserve_32_2_high16_i = static_cast<std::int16_t>(reserve_32_2_high16_u);
 
                         const auto now = std::chrono::steady_clock::now();
                         const auto yaw_angle_raw_from_r32_2 = NormalizeAngleRawToSigned180(reserve_32_2_low16_u);
@@ -605,91 +572,50 @@ namespace
                         reserve32_2AnglePrevTime_ = now;
                         hasReserve32_2AnglePrev_ = true;
 
-                        const auto yaw_vel_candidate_deg_s_from_r32_1_high =
-                            static_cast<float>(reserve_32_1_high16_i) * kScale;
-                        const auto yaw_vel_input_deg_s = has_instant_vel
-                                                             ? yaw_vel_instant_deg_s
-                                                             : yaw_vel_candidate_deg_s_from_r32_1_high;
                         if (!hasDerivedYawVelFiltered_) {
-                            derivedYawVelFilteredDegPerSec_ = yaw_vel_input_deg_s;
+                            derivedYawVelFilteredDegPerSec_ = has_instant_vel ? yaw_vel_instant_deg_s : 0.0f;
                             hasDerivedYawVelFiltered_ = true;
-                        } else {
+                        } else if (has_instant_vel) {
                             derivedYawVelFilteredDegPerSec_ +=
-                                kVelFilterAlpha * (yaw_vel_input_deg_s - derivedYawVelFilteredDegPerSec_);
+                                kVelFilterAlpha * (yaw_vel_instant_deg_s - derivedYawVelFilteredDegPerSec_);
+                        } else {
+                            derivedYawVelFilteredDegPerSec_ *= kVelDecayWhenNoInstant;
                         }
+
+                        if (std::abs(derivedYawVelFilteredDegPerSec_) < kVelDeadbandDegPerSec) {
+                            derivedYawVelFilteredDegPerSec_ = 0.0f;
+                        }
+
                         const auto yaw_vel_publish_i32 = static_cast<std::int32_t>(
                             std::lround(static_cast<double>(derivedYawVelFilteredDegPerSec_ / kScale)));
                         const auto yaw_vel_publish_raw = static_cast<std::int16_t>(
                             std::clamp(yaw_vel_publish_i32, -32768, 32767));
                         const auto yaw_vel_publish_deg_s = static_cast<float>(yaw_vel_publish_raw) * kScale;
+                        const auto yaw_vel_r32_1_high_deg_s =
+                            static_cast<float>(reserve_32_1_high16_i) * kScale;
 
                         static auto last_extend_dump_time = std::chrono::steady_clock::time_point{};
                         if (now - last_extend_dump_time > std::chrono::milliseconds(50)) {
                             last_extend_dump_time = now;
-                            const auto reserve_32_1_b0 = static_cast<unsigned int>(m.Data[4]);
-                            const auto reserve_32_1_b1 = static_cast<unsigned int>(m.Data[5]);
-                            const auto reserve_32_1_b2 = static_cast<unsigned int>(m.Data[6]);
-                            const auto reserve_32_1_b3 = static_cast<unsigned int>(m.Data[7]);
-                            const auto reserve_32_1_bin = std::bitset<32>(reserve_32_1_u32).to_string();
-                            const auto reserve_32_1_bin_grouped =
-                                reserve_32_1_bin.substr(0, 8) + " " +
-                                reserve_32_1_bin.substr(8, 8) + " " +
-                                reserve_32_1_bin.substr(16, 8) + " " +
-                                reserve_32_1_bin.substr(24, 8);
-                            const auto reserve_32_1_low16_bin = std::bitset<16>(reserve_32_1_low16_u).to_string();
-                            const auto reserve_32_1_high16_bin = std::bitset<16>(reserve_32_1_high16_u).to_string();
-                            const auto reserve_32_2_low16_bin = std::bitset<16>(reserve_32_2_low16_u).to_string();
-                            const auto reserve_32_2_high16_bin = std::bitset<16>(reserve_32_2_high16_u).to_string();
                             const auto compare_raw =
                                 static_cast<std::int32_t>(reserve_32_1_high16_i) - static_cast<std::int32_t>(yaw_vel_publish_raw);
-                            const auto posture_high8 =
-                                static_cast<unsigned int>((extend_data.Reserve_16 >> 8) & 0xFFu);
                             roslog::info(
-                                "RX ExtendData raw[12]=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
-                                static_cast<unsigned int>(m.Data[0]), static_cast<unsigned int>(m.Data[1]),
-                                static_cast<unsigned int>(m.Data[2]), static_cast<unsigned int>(m.Data[3]),
-                                static_cast<unsigned int>(m.Data[4]), static_cast<unsigned int>(m.Data[5]),
-                                static_cast<unsigned int>(m.Data[6]), static_cast<unsigned int>(m.Data[7]),
-                                static_cast<unsigned int>(m.Data[8]), static_cast<unsigned int>(m.Data[9]),
-                                static_cast<unsigned int>(m.Data[10]), static_cast<unsigned int>(m.Data[11]));
-                            roslog::info(
-                                "ExtendData parse: uwb_yaw=%u reserve16=0x%04X posture_high8=%u reserve32_1=0x%08X "
-                                "bytes[%02X %02X %02X %02X] reserve32_1_bin=%s "
-                                "low16_bin=%s high16_bin=%s -> legacy_low16(raw)=%d legacy_high16(raw)=%d "
-                                "publish_yaw_vel_raw=%d publish_yaw_angle_raw=%d publish_yaw_vel_deg_s=%.2f publish_yaw_angle_deg=%.2f "
-                                "reserve32_2=0x%08X "
-                                "reserve32_2_low16_raw=%d reserve32_2_low16_bin=%s reserve32_2_low16_x0p01=%.2f "
-                                "reserve32_2_high16_raw=%d reserve32_2_high16_bin=%s reserve32_2_high16_x0p01=%.2f "
-                                "inst_vel_raw=%d inst_vel_deg_s=%.2f inst_valid=%s "
-                                "r32_1_high16_as_vel_raw=%d r32_1_high16_as_vel_deg_s=%.2f "
-                                "r32_1_high16_minus_publish_vel_raw=%d",
-                                static_cast<unsigned int>(extend_data.UWBAngleYaw),
-                                static_cast<unsigned int>(extend_data.Reserve_16),
-                                posture_high8,
-                                static_cast<unsigned int>(extend_data.Reserve_32_1),
-                                reserve_32_1_b0, reserve_32_1_b1, reserve_32_1_b2, reserve_32_1_b3,
-                                reserve_32_1_bin_grouped.c_str(),
-                                reserve_32_1_low16_bin.c_str(),
-                                reserve_32_1_high16_bin.c_str(),
-                                static_cast<int>(reserve_32_1_low16_i),
-                                static_cast<int>(reserve_32_1_high16_i),
-                                static_cast<int>(yaw_vel_publish_raw),
+                                "YawCompare: angle_raw(r32_2_low16)=%d angle_deg=%.2f "
+                                "vel_pub_raw=%d vel_pub_deg_s=%.2f "
+                                "vel_inst_raw=%d vel_inst_deg_s=%.2f inst_valid=%s "
+                                "vel_r32_1_high_raw=%d vel_r32_1_high_deg_s=%.2f "
+                                "diff_raw(r32_1_high-pub)=%d uwb_yaw=%u",
                                 static_cast<int>(yaw_angle_raw_from_r32_2),
-                                static_cast<double>(yaw_vel_publish_deg_s),
                                 static_cast<double>(yaw_angle_deg_from_r32_2),
-                                static_cast<unsigned int>(extend_data.Reserve_32_2),
-                                static_cast<int>(reserve_32_2_low16_i),
-                                reserve_32_2_low16_bin.c_str(),
-                                static_cast<double>(reserve_32_2_low16_i) * kScale,
-                                static_cast<int>(reserve_32_2_high16_i),
-                                reserve_32_2_high16_bin.c_str(),
-                                static_cast<double>(reserve_32_2_high16_i) * kScale,
+                                static_cast<int>(yaw_vel_publish_raw),
+                                static_cast<double>(yaw_vel_publish_deg_s),
                                 static_cast<int>(yaw_vel_instant_raw),
                                 static_cast<double>(yaw_vel_instant_deg_s),
                                 has_instant_vel ? "true" : "false",
                                 static_cast<int>(reserve_32_1_high16_i),
-                                static_cast<double>(yaw_vel_candidate_deg_s_from_r32_1_high),
-                                static_cast<int>(compare_raw));
+                                static_cast<double>(yaw_vel_r32_1_high_deg_s),
+                                static_cast<int>(compare_raw),
+                                static_cast<unsigned int>(extend_data.UWBAngleYaw));
                         }
 
                         PubExtendData(extend_data, yaw_vel_publish_raw, yaw_angle_raw_from_r32_2);
