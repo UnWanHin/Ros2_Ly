@@ -8,7 +8,7 @@
         "HitOutpost": false,
         "HitCar": false,
         "FireRequireTargetStatus": true,
-        "ReuseLatchedAnglesOnNoTarget": false
+        "ReuseLatchedAnglesOnNoTarget": true
     },
     "Rate": {
         "FireRate": 20,
