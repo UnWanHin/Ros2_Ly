@@ -375,6 +375,7 @@ namespace LangYa
         bool HitBuff{false};
         bool HitCar{false};
         bool FireRequireTargetStatus{true};
+        bool ReuseLatchedAnglesOnNoTarget{true};
     };
 
     // 频率相关
