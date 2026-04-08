@@ -29,6 +29,7 @@ private:
     std::vector<std::tuple<cv::Rect2f, int, int>> car_rects;
     Time::TimeStamp last_time;
     bool useMatcherTracking_ = true;
+    bool useWholeCarMatcher_ = true;
     //bool first_track = true;
 
     TrackResults initArmorTrackResult(const GimbalAngleType& gimbalAngle);
@@ -46,6 +47,7 @@ public:
     // getTrackResult 已替换为匹配算法（基于 TrackerMatcher），接口保持不变
     TrackResultPairs getTrackResult(const Time::TimeStamp& time, const GimbalAngleType& gimbalAngle);
     void setUseMatcherTracking(bool enable);
+    void setUseWholeCarMatcher(bool enable);
     
     bool isDetected();
 };

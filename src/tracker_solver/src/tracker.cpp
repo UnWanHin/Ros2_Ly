@@ -482,7 +482,9 @@ TrackResultPairs Tracker::getTrackResult(const Time::TimeStamp& time, const Gimb
         armor_results = initArmorTrackResult(gimbalAngle);
     }
     auto car_results = getCarTrackResult(time, gimbalAngle, armor_results);
-    getArmorTrackResultWithWholeCar(time, gimbalAngle, car_results, armor_results);
+    if (useWholeCarMatcher_) {
+        getArmorTrackResultWithWholeCar(time, gimbalAngle, car_results, armor_results);
+    }
     armors.clear();  // 清空当前帧的装甲板
     armors_gray.clear();
     return std::make_pair(armor_results, car_results);
@@ -491,6 +493,11 @@ TrackResultPairs Tracker::getTrackResult(const Time::TimeStamp& time, const Gimb
 void Tracker::setUseMatcherTracking(bool enable)
 {
     useMatcherTracking_ = enable;
+}
+
+void Tracker::setUseWholeCarMatcher(bool enable)
+{
+    useWholeCarMatcher_ = enable;
 }
 
 bool Tracker::isDetected() 

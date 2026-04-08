@@ -12,6 +12,7 @@ USE_NOGATE=1
 OFFLINE_MODE=0
 MODE_ARG="regional"
 TRACKER_USE_MATCHER=""
+TRACKER_USE_WHOLECAR_MATCHER=""
 LAUNCH_ARGS=()
 DEFAULT_BASE_CONFIG_FILE="${ROOT_DIR}/config/base_config.yaml"
 DEFAULT_DETECTOR_CONFIG_FILE="${ROOT_DIR}/src/detector/config/detector_config.yaml"
@@ -25,7 +26,7 @@ source "${ROOT_DIR}/scripts/lib/ros_launch_common.sh"
 usage() {
   cat <<EOF
 Usage:
-  ${SCRIPT_NAME} [--nogate|--with-gate] [--online|--offline] [--mode league|regional|showcase] [--legacy-tracker|--matcher-tracker] [-- <launch_args...>]
+  ${SCRIPT_NAME} [--nogate|--with-gate] [--online|--offline] [--mode league|regional|showcase] [--legacy-tracker|--matcher-tracker] [--no-wholecar-matcher|--wholecar-matcher] [-- <launch_args...>]
 
 Purpose:
   BT chain armor-only debug wrapper.
@@ -37,6 +38,8 @@ Purpose:
   - supports tracker A/B:
     * --matcher-tracker: use matcher path
     * --legacy-tracker: bypass matcher path
+    * --wholecar-matcher: enable whole-car matcher
+    * --no-wholecar-matcher: disable whole-car matcher
 EOF
 }
 
@@ -83,6 +86,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --matcher-tracker)
       TRACKER_USE_MATCHER=1
+      shift
+      ;;
+    --no-wholecar-matcher)
+      TRACKER_USE_WHOLECAR_MATCHER=0
+      shift
+      ;;
+    --wholecar-matcher)
+      TRACKER_USE_WHOLECAR_MATCHER=1
       shift
       ;;
     --help|-h)
@@ -168,6 +179,13 @@ if [[ -n "${TRACKER_USE_MATCHER}" ]] && ! has_launch_arg_key "tracker_config.use
     LAUNCH_ARGS=("tracker_config.use_matcher_tracking:=true" "${LAUNCH_ARGS[@]}")
   else
     LAUNCH_ARGS=("tracker_config.use_matcher_tracking:=false" "${LAUNCH_ARGS[@]}")
+  fi
+fi
+if [[ -n "${TRACKER_USE_WHOLECAR_MATCHER}" ]] && ! has_launch_arg_key "tracker_config.use_whole_car_matcher" && ! has_launch_arg_key "tracker_config/use_whole_car_matcher"; then
+  if (( TRACKER_USE_WHOLECAR_MATCHER == 1 )); then
+    LAUNCH_ARGS=("tracker_config.use_whole_car_matcher:=true" "${LAUNCH_ARGS[@]}")
+  else
+    LAUNCH_ARGS=("tracker_config.use_whole_car_matcher:=false" "${LAUNCH_ARGS[@]}")
   fi
 fi
 

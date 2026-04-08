@@ -78,10 +78,14 @@ namespace{
             bool use_matcher_tracking = true;
             node.GetParam("tracker_config.use_matcher_tracking", use_matcher_tracking, true);
             tracker->setUseMatcherTracking(use_matcher_tracking);
+            bool use_whole_car_matcher = true;
+            node.GetParam("tracker_config.use_whole_car_matcher", use_whole_car_matcher, true);
+            tracker->setUseWholeCarMatcher(use_whole_car_matcher);
             RCLCPP_INFO(
                 node.get_logger(),
-                "tracker_config.use_matcher_tracking=%s",
-                use_matcher_tracking ? "true" : "false");
+                "tracker_config.use_matcher_tracking=%s, tracker_config.use_whole_car_matcher=%s",
+                use_matcher_tracking ? "true" : "false",
+                use_whole_car_matcher ? "true" : "false");
             
             location::Location::registerSolver(solver);
             
