@@ -224,6 +224,7 @@ namespace LangYa {
     void from_json(const json& j, ChaseSetting& cs) {
         cs.Enable = j.value("Enable", cs.Enable);
         cs.FollowAimTarget = j.value("FollowAimTarget", cs.FollowAimTarget);
+        cs.UseRelativeTargetTopic = j.value("UseRelativeTargetTopic", cs.UseRelativeTargetTopic);
         cs.EnableInAutoAim = j.value("EnableInAutoAim", cs.EnableInAutoAim);
         cs.EnableInRotateScan = j.value("EnableInRotateScan", cs.EnableInRotateScan);
         cs.EnableInOutpostMode = j.value("EnableInOutpostMode", cs.EnableInOutpostMode);
@@ -373,6 +374,7 @@ namespace BehaviorTree {
         LoggerPtr->Debug("------ Chase ------");
         LoggerPtr->Debug("Enable: {}", config.ChaseSettings.Enable);
         LoggerPtr->Debug("FollowAimTarget: {}", config.ChaseSettings.FollowAimTarget);
+        LoggerPtr->Debug("UseRelativeTargetTopic: {}", config.ChaseSettings.UseRelativeTargetTopic);
         LoggerPtr->Debug("EnableInAutoAim: {}", config.ChaseSettings.EnableInAutoAim);
         LoggerPtr->Debug("EnableInRotateScan: {}", config.ChaseSettings.EnableInRotateScan);
         LoggerPtr->Debug("EnableInOutpostMode: {}", config.ChaseSettings.EnableInOutpostMode);

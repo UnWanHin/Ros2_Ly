@@ -26,6 +26,19 @@
     "detector_config/save_video": false
     "detector_config.use_video": false
     "detector_config/use_video": false
+    # ----------------------------------------------------
+    # 2. Solver 配置 (雙重相容區)
+    # Predictor 需要點 (.)，Detector 需要斜線 (/)
+    # ----------------------------------------------------
+    #  相机坐标系：       装甲板坐标系：     世界坐标系:
+    #         z   x           y             和相机坐标系一致
+    #         |  /\           ^
+    #         ^  /            |
+    #         | /             |
+    #  y <----o/              o----> x
+    
+    # 這裡使用 "縮排結構"，ROS 2 會自動解析為點 (.)
+    # 給 Predictor 用： solver_config.camera_intrinsic_matrix
 
     # 8081 overlay controls
     "detector_config.overlay_predictor_center": true

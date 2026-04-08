@@ -280,6 +280,15 @@ namespace BehaviorTree {
                     return false;
             }
         }();
+        naviRelativeTargetValid = false;
+        naviRelativeTargetX = 0.0F;
+        naviRelativeTargetY = 0.0F;
+        naviRelativeTargetZ = 0.0F;
+        naviRelativeTargetDistance = 0.0F;
+        naviRelativeTargetYawErrorDeg = 0.0F;
+        naviRelativeTargetPitchErrorDeg = 0.0F;
+        naviRelativeTargetArmorType = 0U;
+        naviRelativeTargetAimMode = static_cast<std::uint8_t>(aimMode);
         if (find_target) {
             LoggerPtr->Debug("Find Target, AimMode={}", static_cast<int>(aimMode));
             if (!config.AimDebugSettings.StopFire){
@@ -382,6 +391,7 @@ namespace BehaviorTree {
         }
 
         if (chase_mode_enabled) {
+            const bool use_relative_target_topic = config.ChaseSettings.UseRelativeTargetTopic;
             bool has_chase_target = find_target;
             if (!has_chase_target &&
                 config.ChaseSettings.LostTargetHoldMs > 0 &&
@@ -403,39 +413,59 @@ namespace BehaviorTree {
             if (has_chase_target &&
                 chase_distance_valid &&
                 targetArmor.Type != ArmorType::UnKnown) {
-                const double distance_error_cm =
-                    static_cast<double>(distance_cm) -
-                    static_cast<double>(config.ChaseSettings.PreferredDistanceCm);
+                const auto yaw_error_deg = static_cast<double>(
+                    std::remainder(nextAngles.Yaw - gimbalAngles.Yaw, 360.0f));
+                const auto pitch_error_deg = static_cast<double>(
+                    std::remainder(nextAngles.Pitch - gimbalAngles.Pitch, 360.0f));
+                const double distance_m = static_cast<double>(distance_cm) * 0.01;
+                constexpr double kDegToRad = 0.017453292519943295;
+                const double yaw_rad = yaw_error_deg * kDegToRad;
+                const double pitch_rad = pitch_error_deg * kDegToRad;
+                const double cos_pitch = std::cos(pitch_rad);
 
-                int chase_vx = 0;
-                if (std::abs(distance_error_cm) >
-                    static_cast<double>(config.ChaseSettings.DistanceDeadbandCm)) {
-                    chase_vx = static_cast<int>(std::lround(config.ChaseSettings.DistanceKp * distance_error_cm));
-                    chase_vx = std::clamp(
-                        chase_vx,
-                        -config.ChaseSettings.MaxBackwardSpeed,
-                        config.ChaseSettings.MaxForwardSpeed);
-                }
+                naviRelativeTargetValid = true;
+                naviRelativeTargetX = static_cast<float>(distance_m * cos_pitch * std::cos(yaw_rad));
+                naviRelativeTargetY = static_cast<float>(distance_m * cos_pitch * std::sin(yaw_rad));
+                naviRelativeTargetZ = static_cast<float>(distance_m * std::sin(pitch_rad));
+                naviRelativeTargetDistance = static_cast<float>(distance_m);
+                naviRelativeTargetYawErrorDeg = static_cast<float>(yaw_error_deg);
+                naviRelativeTargetPitchErrorDeg = static_cast<float>(pitch_error_deg);
+                naviRelativeTargetArmorType = static_cast<std::uint8_t>(targetArmor.Type);
 
-                int chase_vy = 0;
-                if (config.ChaseSettings.UseYawStrafe) {
-                    const auto yaw_error_deg = static_cast<double>(
-                        std::remainder(nextAngles.Yaw - gimbalAngles.Yaw, 360.0f));
-                    if (std::abs(yaw_error_deg) > static_cast<double>(config.ChaseSettings.YawDeadbandDeg)) {
-                        chase_vy = static_cast<int>(std::lround(config.ChaseSettings.YawKp * yaw_error_deg));
-                        if (config.ChaseSettings.InvertStrafeDirection) {
-                            chase_vy = -chase_vy;
-                        }
-                        chase_vy = std::clamp(
-                            chase_vy,
-                            -config.ChaseSettings.MaxStrafeSpeed,
-                            config.ChaseSettings.MaxStrafeSpeed);
+                if (!use_relative_target_topic) {
+                    const double distance_error_cm =
+                        static_cast<double>(distance_cm) -
+                        static_cast<double>(config.ChaseSettings.PreferredDistanceCm);
+
+                    int chase_vx = 0;
+                    if (std::abs(distance_error_cm) >
+                        static_cast<double>(config.ChaseSettings.DistanceDeadbandCm)) {
+                        chase_vx = static_cast<int>(std::lround(config.ChaseSettings.DistanceKp * distance_error_cm));
+                        chase_vx = std::clamp(
+                            chase_vx,
+                            -config.ChaseSettings.MaxBackwardSpeed,
+                            config.ChaseSettings.MaxForwardSpeed);
                     }
-                }
 
-                nextVelocity.X = static_cast<std::int8_t>(ClampToInt8(chase_vx));
-                nextVelocity.Y = static_cast<std::int8_t>(ClampToInt8(chase_vy));
-            } else if (config.ChaseSettings.StopWhenNoTarget) {
+                    int chase_vy = 0;
+                    if (config.ChaseSettings.UseYawStrafe) {
+                        if (std::abs(yaw_error_deg) > static_cast<double>(config.ChaseSettings.YawDeadbandDeg)) {
+                            chase_vy = static_cast<int>(std::lround(config.ChaseSettings.YawKp * yaw_error_deg));
+                            if (config.ChaseSettings.InvertStrafeDirection) {
+                                chase_vy = -chase_vy;
+                            }
+                            chase_vy = std::clamp(
+                                chase_vy,
+                                -config.ChaseSettings.MaxStrafeSpeed,
+                                config.ChaseSettings.MaxStrafeSpeed);
+                        }
+                    }
+
+                    nextVelocity.X = static_cast<std::int8_t>(ClampToInt8(chase_vx));
+                    nextVelocity.Y = static_cast<std::int8_t>(ClampToInt8(chase_vy));
+                }
+            } else if (!config.ChaseSettings.UseRelativeTargetTopic &&
+                       config.ChaseSettings.StopWhenNoTarget) {
                 nextVelocity = VelocityType{0, 0};
             }
         }

@@ -439,6 +439,7 @@ namespace LangYa
     struct ChaseSetting {
         bool Enable{false};
         bool FollowAimTarget{true};
+        bool UseRelativeTargetTopic{false}; // true: publish /ly/navi/target_rel and let navi own speed control
         bool EnableInAutoAim{true};
         bool EnableInRotateScan{true};
         bool EnableInOutpostMode{false};

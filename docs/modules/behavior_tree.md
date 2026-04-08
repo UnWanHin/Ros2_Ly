@@ -257,6 +257,7 @@ void TreeTick() {
 | `/ly/ra/enable` | 打符模式開關 |
 | `/ly/outpost/enable` | 前哨站瞄準開關 |
 | `/ly/bt/target` | 當前打擊目標類型（→ `detector` 和 `predictor`） |
+| `/ly/navi/target_rel` | 追擊相對目標點（x/y/z，供導航側閉環） |
 | `/ly/navi/goal` | 導航目標點位 |
 | `/ly/navi/goal_pos` | 導航目標座標 |
 | `/ly/navi/speed_level` | 底盤速度等級 |
@@ -328,6 +329,7 @@ void TreeTick() {
   - 默認：`[1, 3, 4, 6, 2]`（Hero > Infantry1 > Infantry2 > Sentry > Engineer）
 - `Chase`：底盤追擊配置
   - `Enable`：總開關
+  - `UseRelativeTargetTopic`：改由 BT 發布 `/ly/navi/target_rel`（x/y/z 相對目標點），導航側負責速度閉環
   - `PreferredDistanceCm`：與目標保持的最適距離（cm）
   - `DistanceDeadbandCm`：距離死區（cm）
   - `DistanceKp` / `MaxForwardSpeed` / `MaxBackwardSpeed`：前後追擊控制

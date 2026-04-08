@@ -147,6 +147,12 @@ ros2 launch detector auto_aim.launch.py \
 ros2 launch detector buff.launch.py
 ```
 
+纯打符（不启 BT、不跑巡逻；由桥接节点直连 `/ly/buff/target -> /ly/control/*`）：
+
+```bash
+./scripts/launch/buff_test.sh
+```
+
 前哨链路：
 
 ```bash

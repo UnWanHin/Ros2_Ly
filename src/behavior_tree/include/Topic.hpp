@@ -45,6 +45,7 @@
 #include "auto_aim_common/msg/armor.hpp"
 #include "auto_aim_common/msg/armors.hpp"
 #include "auto_aim_common/msg/target.hpp"
+#include "auto_aim_common/msg/relative_target.hpp"
 #include "gimbal_driver/msg/game_data.hpp"
 #include "gimbal_driver/msg/gimbal_angles.hpp"
 #include "gimbal_driver/msg/gimbal_yaw.hpp"
@@ -103,6 +104,7 @@ namespace BehaviorTree {
     LY_DEF_ROS_TOPIC(ly_outpost_target, "/ly/outpost/target", auto_aim_common::msg::Target); // 打前哨站云台数据
     
     LY_DEF_ROS_TOPIC(ly_navi_vel, "/ly/navi/vel", gimbal_driver::msg::Vel);
+    LY_DEF_ROS_TOPIC(ly_navi_target_rel, "/ly/navi/target_rel", auto_aim_common::msg::RelativeTarget);
     LY_DEF_ROS_TOPIC(ly_navi_goal, "/ly/navi/goal", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_navi_goal_pos, "/ly/navi/goal_pos", std_msgs::msg::UInt16MultiArray);
     LY_DEF_ROS_TOPIC(ly_navi_speed_level, "/ly/navi/speed_level", std_msgs::msg::UInt8);
