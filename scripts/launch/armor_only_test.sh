@@ -174,6 +174,12 @@ fi
 if ! has_launch_arg_key "use_predictor"; then
   LAUNCH_ARGS=("use_predictor:=true" "${LAUNCH_ARGS[@]}")
 fi
+if ! has_launch_arg_key "predictor_config.publish_only_on_new_tracker_frame" && ! has_launch_arg_key "predictor_config/publish_only_on_new_tracker_frame"; then
+  LAUNCH_ARGS=("predictor_config.publish_only_on_new_tracker_frame:=true" "${LAUNCH_ARGS[@]}")
+fi
+if ! has_launch_arg_key "predictor_config.require_observation_fresh_for_target" && ! has_launch_arg_key "predictor_config/require_observation_fresh_for_target"; then
+  LAUNCH_ARGS=("predictor_config.require_observation_fresh_for_target:=true" "${LAUNCH_ARGS[@]}")
+fi
 if [[ -n "${TRACKER_USE_MATCHER}" ]] && ! has_launch_arg_key "tracker_config.use_matcher_tracking" && ! has_launch_arg_key "tracker_config/use_matcher_tracking"; then
   if (( TRACKER_USE_MATCHER == 1 )); then
     LAUNCH_ARGS=("tracker_config.use_matcher_tracking:=true" "${LAUNCH_ARGS[@]}")
