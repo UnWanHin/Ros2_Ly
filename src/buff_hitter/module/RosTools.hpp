@@ -58,12 +58,7 @@ class ROSNode : public rclcpp::Node {
     std::unordered_map<std::string, rclcpp::SubscriptionBase::SharedPtr> Subscribers;
     std::mutex pub_mutex, sub_mutex;
 public:
-    ROSNode()
-        : rclcpp::Node(
-              TName,
-              rclcpp::NodeOptions()
-                  .allow_undeclared_parameters(true)
-                  .automatically_declare_parameters_from_overrides(true)) {
+    ROSNode() : rclcpp::Node(TName) {
         roslog::info("ROSNode [{}] created", TName);
     }
     template<typename TTopic>

@@ -265,7 +265,7 @@ namespace {
         double yaw_adjustment = 0.0;
         const double adjustment_step = 0.1;
         std::atomic<bool> is_shooting{false};
-        rclcpp::Time shoot_start_time{0, 0, RCL_SYSTEM_TIME};
+        rclcpp::Time shoot_start_time;
         const double shoot_duration = 0.3;
         bool fire_require_dual_axis_lock = true;
         double fire_max_yaw_error_deg = 8.0;
@@ -306,7 +306,7 @@ namespace {
         bool draw_image = true;
         bool myTeamBlue{false};
 
-        rclcpp::Time last_param_check{0, 0, RCL_SYSTEM_TIME};
+        rclcpp::Time last_param_check;
         const double param_check_interval = 3.0;
 
         // [ROS 2] Publishers and Subscribers
@@ -360,7 +360,7 @@ namespace {
             }
 
             markInitStage("ready");
-            last_param_check = getSystemTimeNow();
+            last_param_check = this->now();
         }
         
         ~ShootingTableCalibNode()
@@ -374,11 +374,6 @@ namespace {
         }
 
     private:
-        rclcpp::Time getSystemTimeNow() const
-        {
-            return rclcpp::Clock(RCL_SYSTEM_TIME).now();
-        }
-
         // [ROS 2] 參數獲取輔助函數
         template<typename T>
         void getParamSafe(const std::string& name, T& variable, const T& default_value) {
@@ -922,7 +917,7 @@ namespace {
             tracker->merge(car_detections);
             
             // [ROS 2] 時間轉換
-            auto track_results = tracker->getTrackResult(getSystemTimeNow(), gimbal_angle);
+            auto track_results = tracker->getTrackResult(rclcpp::Time(this->now()), gimbal_angle);
             solver->solve_all(track_results, gimbal_angle);
 
             const auto* best_track =
@@ -1231,7 +1226,7 @@ namespace {
 
         void checkAndUpdateParams()
         {
-            rclcpp::Time current_time = getSystemTimeNow();
+            rclcpp::Time current_time = this->now();
             if ((current_time - last_param_check).seconds() >= param_check_interval) {
                 loadShootTableParams();
                 last_param_check = current_time;
@@ -1280,7 +1275,7 @@ namespace {
                 record.target_yaw = target_yaw;
                 record.fitted_pitch = fitPitch(record.z_height, record.horizontal_distance);
                 record.fitted_yaw = fitYaw(record.z_height, record.horizontal_distance);
-                record.timestamp = getSystemTimeNow();
+                record.timestamp = this->now();
                 
                 std::ofstream file(csv_filename, std::ios::app);
                 if (!file.is_open()) {
@@ -1344,7 +1339,7 @@ namespace {
                         }
                         aim_only_mode.store(false);
                         is_shooting.store(true);
-                        shoot_start_time = getSystemTimeNow();
+                        shoot_start_time = this->now();
                         sendControlCommand();
                         updateFireControl(true);
                     }
@@ -1445,7 +1440,7 @@ namespace {
                                 continue;
                             }
                         }
-                        rclcpp::Time current_time = getSystemTimeNow();
+                        rclcpp::Time current_time = this->now();
                         if ((current_time - shoot_start_time).seconds() >= shoot_duration) {
                             is_shooting.store(false);
                             updateFireControl(false);
