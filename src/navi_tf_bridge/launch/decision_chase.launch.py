@@ -1,13 +1,92 @@
 #!/usr/bin/env python3
 
+import json
 import os
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction, SetLaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+
+def _resolve_bt_config_path(behavior_tree_share: str, configured_path: str) -> str:
+    if not configured_path:
+        return ""
+    path = Path(configured_path)
+    if path.is_absolute():
+        return str(path)
+    return str((Path(behavior_tree_share) / path).resolve(strict=False))
+
+
+def _normalize_bool(raw: str) -> str:
+    value = (raw or "").strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return "true"
+    if value in ("0", "false", "no", "off"):
+        return "false"
+    return ""
+
+
+def _resolve_bridge_chase_params(context, behavior_tree_share: str):
+    resolved_preferred_distance_cm = "100"
+    resolved_distance_deadband_cm = "50"
+    resolved_stop_when_no_target = "true"
+
+    bt_config_file_value = LaunchConfiguration("bt_config_file").perform(context).strip()
+    bt_config_path = _resolve_bt_config_path(behavior_tree_share, bt_config_file_value)
+    if bt_config_path and os.path.exists(bt_config_path):
+        try:
+            with open(bt_config_path, encoding="utf-8") as fh:
+                config_root = json.load(fh)
+            chase_cfg = config_root.get("Chase", {})
+            if isinstance(chase_cfg, dict):
+                resolved_preferred_distance_cm = str(
+                    int(chase_cfg.get("PreferredDistanceCm", int(resolved_preferred_distance_cm)))
+                )
+                resolved_distance_deadband_cm = str(
+                    int(chase_cfg.get("DistanceDeadbandCm", int(resolved_distance_deadband_cm)))
+                )
+                resolved_stop_when_no_target = (
+                    "true" if bool(chase_cfg.get("StopWhenNoTarget", True)) else "false"
+                )
+        except Exception as ex:
+            print(
+                f"[decision_chase] failed to parse bt_config_file '{bt_config_path}': {ex}. "
+                "Bridge chase parameters fall back to defaults."
+            )
+
+    preferred_override = LaunchConfiguration("preferred_distance_cm").perform(context).strip()
+    if preferred_override:
+        resolved_preferred_distance_cm = preferred_override
+
+    deadband_override = LaunchConfiguration("distance_deadband_cm").perform(context).strip()
+    if deadband_override:
+        resolved_distance_deadband_cm = deadband_override
+
+    stop_override = _normalize_bool(LaunchConfiguration("stop_when_no_target").perform(context))
+    if stop_override:
+        resolved_stop_when_no_target = stop_override
+
+    allow_reverse_goal = _normalize_bool(LaunchConfiguration("allow_reverse_goal").perform(context))
+    if not allow_reverse_goal:
+        allow_reverse_goal = "false"
+
+    return [
+        SetLaunchConfiguration(
+            "resolved_bridge_preferred_distance_cm", resolved_preferred_distance_cm
+        ),
+        SetLaunchConfiguration(
+            "resolved_bridge_distance_deadband_cm", resolved_distance_deadband_cm
+        ),
+        SetLaunchConfiguration(
+            "resolved_bridge_stop_when_no_target", resolved_stop_when_no_target
+        ),
+        SetLaunchConfiguration("resolved_bridge_allow_reverse_goal", allow_reverse_goal),
+    ]
 
 
 def generate_launch_description():
@@ -61,6 +140,55 @@ def generate_launch_description():
         DeclareLaunchArgument("publish_target_map", default_value="true"),
         DeclareLaunchArgument("invert_y_axis", default_value="false"),
         DeclareLaunchArgument("y_axis_max_cm", default_value="1500"),
+        DeclareLaunchArgument(
+            "preferred_distance_cm",
+            default_value="",
+            description="Optional bridge override. Empty means load Chase.PreferredDistanceCm from bt_config_file.",
+        ),
+        DeclareLaunchArgument(
+            "distance_deadband_cm",
+            default_value="",
+            description="Optional bridge override. Empty means load Chase.DistanceDeadbandCm from bt_config_file.",
+        ),
+        DeclareLaunchArgument(
+            "stop_when_no_target",
+            default_value="",
+            description="Optional bridge override. Empty means load Chase.StopWhenNoTarget from bt_config_file.",
+        ),
+        DeclareLaunchArgument(
+            "allow_reverse_goal",
+            default_value="false",
+            description="Whether the bridge may output a reverse chase goal when already too close to the target.",
+        ),
+        DeclareLaunchArgument("resolved_bridge_preferred_distance_cm", default_value="100"),
+        DeclareLaunchArgument("resolved_bridge_distance_deadband_cm", default_value="50"),
+        DeclareLaunchArgument("resolved_bridge_stop_when_no_target", default_value="true"),
+        DeclareLaunchArgument("resolved_bridge_allow_reverse_goal", default_value="false"),
+        OpaqueFunction(function=_resolve_bridge_chase_params, args=[behavior_tree_share]),
+        LogInfo(
+            msg=[
+                "[decision_chase] bridge preferred_distance_cm: ",
+                LaunchConfiguration("resolved_bridge_preferred_distance_cm"),
+            ]
+        ),
+        LogInfo(
+            msg=[
+                "[decision_chase] bridge distance_deadband_cm: ",
+                LaunchConfiguration("resolved_bridge_distance_deadband_cm"),
+            ]
+        ),
+        LogInfo(
+            msg=[
+                "[decision_chase] bridge stop_when_no_target: ",
+                LaunchConfiguration("resolved_bridge_stop_when_no_target"),
+            ]
+        ),
+        LogInfo(
+            msg=[
+                "[decision_chase] bridge allow_reverse_goal: ",
+                LaunchConfiguration("resolved_bridge_allow_reverse_goal"),
+            ]
+        ),
     ]
 
     chase_only = IncludeLaunchDescription(
@@ -103,10 +231,30 @@ def generate_launch_description():
                 "map_frame": LaunchConfiguration("map_frame"),
                 "base_frame": LaunchConfiguration("base_frame"),
                 "fallback_base_frame": LaunchConfiguration("fallback_base_frame"),
-                "use_msg_frame_id": LaunchConfiguration("use_msg_frame_id"),
-                "publish_target_map": LaunchConfiguration("publish_target_map"),
-                "invert_y_axis": LaunchConfiguration("invert_y_axis"),
-                "y_axis_max_cm": LaunchConfiguration("y_axis_max_cm"),
+                "use_msg_frame_id": ParameterValue(
+                    LaunchConfiguration("use_msg_frame_id"), value_type=bool
+                ),
+                "publish_target_map": ParameterValue(
+                    LaunchConfiguration("publish_target_map"), value_type=bool
+                ),
+                "invert_y_axis": ParameterValue(
+                    LaunchConfiguration("invert_y_axis"), value_type=bool
+                ),
+                "y_axis_max_cm": ParameterValue(
+                    LaunchConfiguration("y_axis_max_cm"), value_type=int
+                ),
+                "preferred_distance_cm": ParameterValue(
+                    LaunchConfiguration("resolved_bridge_preferred_distance_cm"), value_type=int
+                ),
+                "distance_deadband_cm": ParameterValue(
+                    LaunchConfiguration("resolved_bridge_distance_deadband_cm"), value_type=int
+                ),
+                "stop_when_no_target": ParameterValue(
+                    LaunchConfiguration("resolved_bridge_stop_when_no_target"), value_type=bool
+                ),
+                "allow_reverse_goal": ParameterValue(
+                    LaunchConfiguration("resolved_bridge_allow_reverse_goal"), value_type=bool
+                ),
             }
         ],
     )
