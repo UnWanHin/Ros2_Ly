@@ -11,6 +11,8 @@ SCRIPT_NAME="$(basename "$0")"
 USE_NOGATE=1
 OFFLINE_MODE=0
 MODE_ARG="regional"
+TRACKER_USE_MATCHER=""
+TRACKER_USE_WHOLECAR_MATCHER=""
 LAUNCH_ARGS=()
 DEFAULT_BASE_CONFIG_FILE="${ROOT_DIR}/config/base_config.yaml"
 DEFAULT_DETECTOR_CONFIG_FILE="${ROOT_DIR}/src/detector/config/detector_config.yaml"
@@ -24,7 +26,7 @@ source "${ROOT_DIR}/scripts/lib/ros_launch_common.sh"
 usage() {
   cat <<EOF
 Usage:
-  ${SCRIPT_NAME} [--nogate|--with-gate] [--online|--offline] [--mode league|regional|showcase] [-- <launch_args...>]
+  ${SCRIPT_NAME} [--nogate|--with-gate] [--online|--offline] [--mode league|regional|showcase] [--legacy-tracker|--matcher-tracker] [--no-wholecar-matcher|--wholecar-matcher] [-- <launch_args...>]
 
 Purpose:
   BT chain armor-only debug wrapper.
@@ -33,6 +35,11 @@ Purpose:
   - fire enabled (same as armor_test style)
   - detector visualization enabled by default (show/draw/web_show=true)
   - keeps outpost/buff nodes disabled by default
+  - supports tracker A/B:
+    * --matcher-tracker: use matcher path
+    * --legacy-tracker: bypass matcher path
+    * --wholecar-matcher: enable whole-car matcher
+    * --no-wholecar-matcher: disable whole-car matcher
 EOF
 }
 
@@ -73,6 +80,22 @@ while [[ $# -gt 0 ]]; do
       MODE_ARG="$2"
       shift 2
       ;;
+    --legacy-tracker)
+      TRACKER_USE_MATCHER=0
+      shift
+      ;;
+    --matcher-tracker)
+      TRACKER_USE_MATCHER=1
+      shift
+      ;;
+    --no-wholecar-matcher)
+      TRACKER_USE_WHOLECAR_MATCHER=0
+      shift
+      ;;
+    --wholecar-matcher)
+      TRACKER_USE_WHOLECAR_MATCHER=1
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -90,7 +113,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 source_ros_workspace "${ROOT_DIR}"
-cleanup_existing_stack "1" "/(gimbal_driver_node|detector_node|tracker_solver_node|predictor_node|outpost_hitter_node|buff_hitter_node|behavior_tree_node|target_to_gimbal_mapper|buff_test_bridge)([[:space:]]|$)" "ros2 launch (behavior_tree|detector) (competition_autoaim|sentry_all|chase_only|showcase|navi_debug|auto_aim|buff_test|buff)\\.launch.py"
+cleanup_existing_stack "1" "/(gimbal_driver_node|detector_node|tracker_solver_node|predictor_node|outpost_hitter_node|buff_hitter_node|behavior_tree_node|buff_test_bridge|shooting_table_calib_node|fire_flip_test)([[:space:]]|$)" "ros2 launch (behavior_tree|detector|shooting_table_calib) (competition_autoaim|sentry_all|chase_only|showcase|navi_debug|auto_aim|buff_test|buff|shooting_table_calib)\\.launch.py"
 
 if [[ -f "${DEFAULT_BASE_CONFIG_FILE}" ]] && ! has_launch_arg_key "base_config_file"; then
   LAUNCH_ARGS=("base_config_file:=${DEFAULT_BASE_CONFIG_FILE}" "${LAUNCH_ARGS[@]}")
@@ -150,6 +173,26 @@ if ! has_launch_arg_key "use_tracker"; then
 fi
 if ! has_launch_arg_key "use_predictor"; then
   LAUNCH_ARGS=("use_predictor:=true" "${LAUNCH_ARGS[@]}")
+fi
+if ! has_launch_arg_key "predictor_config.publish_only_on_new_tracker_frame" && ! has_launch_arg_key "predictor_config/publish_only_on_new_tracker_frame"; then
+  LAUNCH_ARGS=("predictor_config.publish_only_on_new_tracker_frame:=true" "${LAUNCH_ARGS[@]}")
+fi
+if ! has_launch_arg_key "predictor_config.require_observation_fresh_for_target" && ! has_launch_arg_key "predictor_config/require_observation_fresh_for_target"; then
+  LAUNCH_ARGS=("predictor_config.require_observation_fresh_for_target:=true" "${LAUNCH_ARGS[@]}")
+fi
+if [[ -n "${TRACKER_USE_MATCHER}" ]] && ! has_launch_arg_key "tracker_config.use_matcher_tracking" && ! has_launch_arg_key "tracker_config/use_matcher_tracking"; then
+  if (( TRACKER_USE_MATCHER == 1 )); then
+    LAUNCH_ARGS=("tracker_config.use_matcher_tracking:=true" "${LAUNCH_ARGS[@]}")
+  else
+    LAUNCH_ARGS=("tracker_config.use_matcher_tracking:=false" "${LAUNCH_ARGS[@]}")
+  fi
+fi
+if [[ -n "${TRACKER_USE_WHOLECAR_MATCHER}" ]] && ! has_launch_arg_key "tracker_config.use_whole_car_matcher" && ! has_launch_arg_key "tracker_config/use_whole_car_matcher"; then
+  if (( TRACKER_USE_WHOLECAR_MATCHER == 1 )); then
+    LAUNCH_ARGS=("tracker_config.use_whole_car_matcher:=true" "${LAUNCH_ARGS[@]}")
+  else
+    LAUNCH_ARGS=("tracker_config.use_whole_car_matcher:=false" "${LAUNCH_ARGS[@]}")
+  fi
 fi
 
 exec ros2 launch behavior_tree competition_autoaim.launch.py "${LAUNCH_ARGS[@]}"
