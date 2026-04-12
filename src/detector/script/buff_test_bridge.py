@@ -38,28 +38,45 @@ class BuffTestBridge(Node):
         self.declare_parameter("target_topic", "/ly/buff/target")
         self.declare_parameter("aa_enable_topic", "/ly/aa/enable")
         self.declare_parameter("ra_enable_topic", "/ly/ra/enable")
+        self.declare_parameter("outpost_enable_topic", "/ly/outpost/enable")
+        self.declare_parameter("bt_target_topic", "/ly/bt/target")
         self.declare_parameter("control_angles_topic", "/ly/control/angles")
         self.declare_parameter("control_firecode_topic", "/ly/control/firecode")
         self.declare_parameter("control_vel_topic", "/ly/control/vel")
+        self.declare_parameter("gate_aa_enable", False)
+        self.declare_parameter("gate_ra_enable", True)
+        self.declare_parameter("gate_outpost_enable", False)
+        self.declare_parameter("gate_publish_bt_target", False)
+        self.declare_parameter("gate_bt_target", 1)
         self.declare_parameter("timeout_sec", 1.0)
         self.declare_parameter("publish_hz", 80.0)
         self.declare_parameter("gate_hz", 2.0)
         self.declare_parameter("fire_hz", 20.0)
         self.declare_parameter("enable_fire", True)
+        self.declare_parameter("use_target_status", True)
         self.declare_parameter("zero_velocity", True)
 
         self.target_topic = str(self.get_parameter("target_topic").value)
         self.aa_enable_topic = str(self.get_parameter("aa_enable_topic").value)
         self.ra_enable_topic = str(self.get_parameter("ra_enable_topic").value)
+        self.outpost_enable_topic = str(self.get_parameter("outpost_enable_topic").value)
+        self.bt_target_topic = str(self.get_parameter("bt_target_topic").value)
         self.control_angles_topic = str(self.get_parameter("control_angles_topic").value)
         self.control_firecode_topic = str(self.get_parameter("control_firecode_topic").value)
         self.control_vel_topic = str(self.get_parameter("control_vel_topic").value)
+
+        self.gate_aa_enable = bool(self.get_parameter("gate_aa_enable").value)
+        self.gate_ra_enable = bool(self.get_parameter("gate_ra_enable").value)
+        self.gate_outpost_enable = bool(self.get_parameter("gate_outpost_enable").value)
+        self.gate_publish_bt_target = bool(self.get_parameter("gate_publish_bt_target").value)
+        self.gate_bt_target = int(self.get_parameter("gate_bt_target").value) & 0xFF
 
         timeout_sec = float(self.get_parameter("timeout_sec").value)
         publish_hz = float(self.get_parameter("publish_hz").value)
         gate_hz = float(self.get_parameter("gate_hz").value)
         fire_hz = float(self.get_parameter("fire_hz").value)
         self.enable_fire = bool(self.get_parameter("enable_fire").value)
+        self.use_target_status = bool(self.get_parameter("use_target_status").value)
         self.zero_velocity = bool(self.get_parameter("zero_velocity").value)
 
         self.timeout_ns = int(max(timeout_sec, 0.05) * 1e9)
@@ -67,6 +84,8 @@ class BuffTestBridge(Node):
 
         self.pub_aa_enable = self.create_publisher(Bool, self.aa_enable_topic, 10)
         self.pub_ra_enable = self.create_publisher(Bool, self.ra_enable_topic, 10)
+        self.pub_outpost_enable = self.create_publisher(Bool, self.outpost_enable_topic, 10)
+        self.pub_bt_target = self.create_publisher(UInt8, self.bt_target_topic, 10)
         self.pub_angles = self.create_publisher(GimbalAngles, self.control_angles_topic, 50)
         self.pub_firecode = self.create_publisher(UInt8, self.control_firecode_topic, 50)
         self.pub_vel = self.create_publisher(Vel, self.control_vel_topic, 20)
@@ -85,8 +104,11 @@ class BuffTestBridge(Node):
         self.get_logger().info(
             "buff_test_bridge started: "
             f"target={self.target_topic} -> angles={self.control_angles_topic}, firecode={self.control_firecode_topic}, "
-            f"aa=false@{self.aa_enable_topic}, ra=true@{self.ra_enable_topic}, "
-            f"enable_fire={int(self.enable_fire)} fire_hz={fire_hz:.1f}"
+            f"aa={int(self.gate_aa_enable)}@{self.aa_enable_topic}, "
+            f"ra={int(self.gate_ra_enable)}@{self.ra_enable_topic}, "
+            f"outpost={int(self.gate_outpost_enable)}@{self.outpost_enable_topic}, "
+            f"bt_target={'off' if not self.gate_publish_bt_target else self.gate_bt_target}@{self.bt_target_topic}, "
+            f"enable_fire={int(self.enable_fire)} use_target_status={int(self.use_target_status)} fire_hz={fire_hz:.1f}"
         )
 
     def _on_target(self, msg: Target) -> None:
@@ -100,12 +122,21 @@ class BuffTestBridge(Node):
 
     def _on_gate_timer(self) -> None:
         aa_msg = Bool()
-        aa_msg.data = False
+        aa_msg.data = self.gate_aa_enable
         self.pub_aa_enable.publish(aa_msg)
 
         ra_msg = Bool()
-        ra_msg.data = True
+        ra_msg.data = self.gate_ra_enable
         self.pub_ra_enable.publish(ra_msg)
+
+        outpost_msg = Bool()
+        outpost_msg.data = self.gate_outpost_enable
+        self.pub_outpost_enable.publish(outpost_msg)
+
+        if self.gate_publish_bt_target:
+            target_msg = UInt8()
+            target_msg.data = self.gate_bt_target
+            self.pub_bt_target.publish(target_msg)
 
     def _publish_zero_velocity(self) -> None:
         if not self.zero_velocity:
@@ -143,7 +174,10 @@ class BuffTestBridge(Node):
         angles.pitch = float(self.latest_target.pitch)
         self.pub_angles.publish(angles)
 
-        should_fire = self.enable_fire and bool(self.latest_target.status)
+        if self.use_target_status:
+            should_fire = self.enable_fire and bool(self.latest_target.status)
+        else:
+            should_fire = self.enable_fire
         if should_fire and (now_ns - self.last_fire_toggle_ns) >= self.fire_interval_ns:
             self.fire_status = 0b11 if self.fire_status == 0 else 0
             self.last_fire_toggle_ns = now_ns

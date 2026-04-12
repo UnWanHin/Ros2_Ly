@@ -27,6 +27,7 @@ Entries:
   move_rotate           Rotate + /ly/control/vel sine-translate test.
   posture-test          /ly/control/posture cycle test and /ly/gimbal/posture watch.
   chase-only            No-gate pure chase test (lower-machine online by default).
+  outpost-target-test   Publish /ly/outpost/target yaw sequence 45/60/75 for bridge test.
 
 Examples:
   ./scripts/debug.sh
@@ -78,6 +79,9 @@ run_entry() {
     13|chase-only|chase_only|chase)
       exec "${ROOT_DIR}/debug/chase_only.sh" "$@"
       ;;
+    14|outpost-target-test|outpost_target_test|outpost-target|outpost_target)
+      exec "${ROOT_DIR}/debug/outpost_target_test.sh" "$@"
+      ;;
     ""|menu)
       ;;
     *)
@@ -111,6 +115,7 @@ echo " 10) rotate_level"
 echo " 11) move_rotate"
 echo " 12) posture-test"
 echo " 13) chase-only"
-read -r -p "Input 1-13 [default: 1]: " choice
+echo " 14) outpost-target-test"
+read -r -p "Input 1-14 [default: 1]: " choice
 choice="${choice:-1}"
 run_entry "${choice}"
