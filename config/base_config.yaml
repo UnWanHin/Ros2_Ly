@@ -58,7 +58,7 @@
     # IO / serial base (shared by gimbal_driver and startup wrappers)
     io_config:
       use_virtual_device: false
-      device_name: "/dev/ttyACM0"
+      device_name: "/dev/ttyACM0"ws
       baud_rate: 115200
       posture_repeat_count: 3
       posture_repeat_interval_ms: 20
