@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-dir",
         default="",
-        help="Image directory. If not provided, script asks interactively.",
+        help="Image directory. Default: auto-pick latest session under tools/PnPcamera/save.",
     )
     parser.add_argument(
         "--camera-name",
@@ -55,12 +55,24 @@ def parse_args() -> argparse.Namespace:
 def ask_input_dir(cli_value: str) -> Path:
     if cli_value:
         return Path(cli_value).expanduser().resolve()
+    return auto_pick_input_dir(DEFAULT_SAVE_ROOT)
 
-    default_path = DEFAULT_SAVE_ROOT
-    raw = input(f"Image folder path [{default_path}]: ").strip()
-    if not raw:
-        return default_path.resolve()
-    return Path(raw).expanduser().resolve()
+
+def auto_pick_input_dir(save_root: Path) -> Path:
+    root = save_root.expanduser().resolve()
+    if not root.exists():
+        return root
+
+    session_dirs = [p for p in root.iterdir() if p.is_dir()]
+    session_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    exts = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
+    for session in session_dirs:
+        has_image = any((f.is_file() and f.suffix.lower() in exts) for f in session.iterdir())
+        if has_image:
+            return session
+
+    return root
 
 
 def collect_images(image_dir: Path) -> list[Path]:
