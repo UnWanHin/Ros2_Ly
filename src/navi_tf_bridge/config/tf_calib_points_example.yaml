@@ -1,0 +1,15 @@
+source_frame: lower_map
+target_frame: radar_map
+unit: cm
+tz: 0
+points:
+  - name: p1
+    source: [393, 810]
+    target: [402, 796]
+  - name: p2
+    source: [2408, 683]
+    target: [2397, 701]
+  - name: p3
+    source: [980, 1124]
+    target: [995, 1136]
+

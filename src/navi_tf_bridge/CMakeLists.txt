@@ -38,6 +38,12 @@ install(PROGRAMS
   RENAME manual_goal_input_node
 )
 
+install(PROGRAMS
+  script/solve_static_tf_from_points.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME solve_static_tf_from_points
+)
+
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )

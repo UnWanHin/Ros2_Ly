@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <chrono>
 #include <cstdint>
@@ -7,6 +9,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "auto_aim_common/msg/relative_target.hpp"
@@ -59,6 +62,24 @@ public:
     debug_area_header_file_ = this->declare_parameter<std::string>("debug_area_header_file", "");
     debug_point_pairs_output_file_ =
       this->declare_parameter<std::string>("debug_point_pairs_output_file", "");
+    use_raw_goal_static_calibration_ =
+      this->declare_parameter<bool>("use_raw_goal_static_calibration", false);
+    raw_goal_calibration_model_ =
+      this->declare_parameter<std::string>("raw_goal_calibration_model", "rigid");
+    raw_goal_calibration_unit_ =
+      this->declare_parameter<std::string>("raw_goal_calibration_unit", "cm");
+    raw_goal_source_frame_ =
+      this->declare_parameter<std::string>("raw_goal_source_frame", "official_map");
+    raw_goal_target_frame_ =
+      this->declare_parameter<std::string>("raw_goal_target_frame", "map");
+    raw_goal_source_points_ =
+      this->declare_parameter<std::vector<double>>(
+      "raw_goal_source_points", std::vector<double>{});
+    raw_goal_target_points_ =
+      this->declare_parameter<std::vector<double>>(
+      "raw_goal_target_points", std::vector<double>{});
+
+    initializeRawGoalStaticCalibration();
 
     sub_target_rel_ = this->create_subscription<auto_aim_common::msg::RelativeTarget>(
       input_topic_,
@@ -81,7 +102,8 @@ public:
       this->get_logger(),
       "Started target_rel -> goal_pos bridge. in=%s out=%s map_frame=%s base_frame=%s "
       "fallback_base_frame=%s raw_goal_in=%s raw_goal_frame=%s invert_y_axis=%s y_axis_max_cm=%d preferred_distance_cm=%d "
-      "distance_deadband_cm=%d stop_when_no_target=%s allow_reverse_goal=%s",
+      "distance_deadband_cm=%d stop_when_no_target=%s allow_reverse_goal=%s "
+      "use_raw_goal_static_calibration=%s model=%s source_frame=%s target_frame=%s",
       input_topic_.c_str(),
       output_goal_pos_topic_.c_str(),
       map_frame_.c_str(),
@@ -94,7 +116,11 @@ public:
       preferred_distance_cm_,
       distance_deadband_cm_,
       stop_when_no_target_ ? "true" : "false",
-      allow_reverse_goal_ ? "true" : "false");
+      allow_reverse_goal_ ? "true" : "false",
+      use_raw_goal_static_calibration_ ? "true" : "false",
+      raw_goal_calibration_model_.c_str(),
+      raw_goal_source_frame_.c_str(),
+      raw_goal_target_frame_.c_str());
 
     if (debug_export_point_pairs_) {
       debug_export_timer_ = this->create_wall_timer(
@@ -133,6 +159,369 @@ private:
     int x_cm{0};
     int y_cm{0};
   };
+
+  struct RawGoalPair
+  {
+    double sx_m{0.0};
+    double sy_m{0.0};
+    double tx_m{0.0};
+    double ty_m{0.0};
+  };
+
+  static double triangleArea2(
+    const std::pair<double, double> & p1,
+    const std::pair<double, double> & p2,
+    const std::pair<double, double> & p3)
+  {
+    return (p2.first - p1.first) * (p3.second - p1.second) -
+           (p2.second - p1.second) * (p3.first - p1.first);
+  }
+
+  static double maxAbsTriangleArea2(const std::vector<std::pair<double, double>> & points)
+  {
+    double best = 0.0;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+      for (std::size_t j = i + 1; j < points.size(); ++j) {
+        for (std::size_t k = j + 1; k < points.size(); ++k) {
+          best = std::max(best, std::abs(triangleArea2(points[i], points[j], points[k])));
+        }
+      }
+    }
+    return best;
+  }
+
+  bool parseRawGoalPairs(std::vector<RawGoalPair> & pairs_out, double & unit_scale) const
+  {
+    pairs_out.clear();
+    unit_scale = 0.01;
+    const std::string unit = raw_goal_calibration_unit_;
+    if (unit == "cm" || unit == "CM") {
+      unit_scale = 0.01;
+    } else if (unit == "m" || unit == "M") {
+      unit_scale = 1.0;
+    } else {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Raw-goal static calibration unit '%s' is invalid. Use 'cm' or 'm'.",
+        raw_goal_calibration_unit_.c_str());
+      return false;
+    }
+
+    if (raw_goal_source_points_.empty() || raw_goal_target_points_.empty()) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Raw-goal static calibration enabled but point lists are empty.");
+      return false;
+    }
+    if (raw_goal_source_points_.size() != raw_goal_target_points_.size()) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Raw-goal static calibration point size mismatch: source=%zu target=%zu",
+        raw_goal_source_points_.size(),
+        raw_goal_target_points_.size());
+      return false;
+    }
+    if ((raw_goal_source_points_.size() % 2) != 0) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Raw-goal static calibration points must be [x1,y1,x2,y2,...], got odd length=%zu",
+        raw_goal_source_points_.size());
+      return false;
+    }
+
+    const std::size_t pair_count = raw_goal_source_points_.size() / 2;
+    if (pair_count < 3) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Raw-goal static calibration needs at least 3 point pairs, got %zu.",
+        pair_count);
+      return false;
+    }
+
+    pairs_out.reserve(pair_count);
+    for (std::size_t i = 0; i < pair_count; ++i) {
+      const std::size_t idx = i * 2;
+      pairs_out.push_back(RawGoalPair{
+        .sx_m = raw_goal_source_points_[idx] * unit_scale,
+        .sy_m = raw_goal_source_points_[idx + 1] * unit_scale,
+        .tx_m = raw_goal_target_points_[idx] * unit_scale,
+        .ty_m = raw_goal_target_points_[idx + 1] * unit_scale});
+    }
+
+    std::vector<std::pair<double, double>> src_points;
+    std::vector<std::pair<double, double>> dst_points;
+    src_points.reserve(pairs_out.size());
+    dst_points.reserve(pairs_out.size());
+    for (const auto & p : pairs_out) {
+      src_points.emplace_back(p.sx_m, p.sy_m);
+      dst_points.emplace_back(p.tx_m, p.ty_m);
+    }
+    if (maxAbsTriangleArea2(src_points) <= 1e-12 || maxAbsTriangleArea2(dst_points) <= 1e-12) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Raw-goal static calibration points are degenerate (nearly collinear).");
+      return false;
+    }
+
+    return true;
+  }
+
+  static bool solveLinear6x6(
+    std::array<std::array<double, 6>, 6> a,
+    std::array<double, 6> b,
+    std::array<double, 6> & x)
+  {
+    constexpr int N = 6;
+    for (int i = 0; i < N; ++i) {
+      int pivot = i;
+      double best = std::abs(a[i][i]);
+      for (int r = i + 1; r < N; ++r) {
+        const double v = std::abs(a[r][i]);
+        if (v > best) {
+          best = v;
+          pivot = r;
+        }
+      }
+      if (best <= 1e-12) {
+        return false;
+      }
+      if (pivot != i) {
+        std::swap(a[pivot], a[i]);
+        std::swap(b[pivot], b[i]);
+      }
+
+      const double diag = a[i][i];
+      for (int c = i; c < N; ++c) {
+        a[i][c] /= diag;
+      }
+      b[i] /= diag;
+
+      for (int r = 0; r < N; ++r) {
+        if (r == i) {
+          continue;
+        }
+        const double factor = a[r][i];
+        if (std::abs(factor) <= 1e-15) {
+          continue;
+        }
+        for (int c = i; c < N; ++c) {
+          a[r][c] -= factor * a[i][c];
+        }
+        b[r] -= factor * b[i];
+      }
+    }
+
+    x = b;
+    return true;
+  }
+
+  static bool solveAffine2D(
+    const std::vector<RawGoalPair> & pairs,
+    double & m00,
+    double & m01,
+    double & m10,
+    double & m11,
+    double & tx,
+    double & ty)
+  {
+    std::array<std::array<double, 6>, 6> ata{};
+    std::array<double, 6> atb{};
+
+    for (const auto & p : pairs) {
+      const std::array<double, 6> row_x{p.sx_m, p.sy_m, 1.0, 0.0, 0.0, 0.0};
+      const std::array<double, 6> row_y{0.0, 0.0, 0.0, p.sx_m, p.sy_m, 1.0};
+      const double bx = p.tx_m;
+      const double by = p.ty_m;
+
+      for (int i = 0; i < 6; ++i) {
+        atb[i] += row_x[i] * bx + row_y[i] * by;
+        for (int j = 0; j < 6; ++j) {
+          ata[i][j] += row_x[i] * row_x[j] + row_y[i] * row_y[j];
+        }
+      }
+    }
+
+    std::array<double, 6> x{};
+    if (!solveLinear6x6(ata, atb, x)) {
+      return false;
+    }
+    m00 = x[0];
+    m01 = x[1];
+    tx = x[2];
+    m10 = x[3];
+    m11 = x[4];
+    ty = x[5];
+    return true;
+  }
+
+  static bool solveRigid2D(
+    const std::vector<RawGoalPair> & pairs,
+    double & m00,
+    double & m01,
+    double & m10,
+    double & m11,
+    double & tx,
+    double & ty)
+  {
+    const double n = static_cast<double>(pairs.size());
+    double src_cx = 0.0;
+    double src_cy = 0.0;
+    double dst_cx = 0.0;
+    double dst_cy = 0.0;
+    for (const auto & p : pairs) {
+      src_cx += p.sx_m;
+      src_cy += p.sy_m;
+      dst_cx += p.tx_m;
+      dst_cy += p.ty_m;
+    }
+    src_cx /= n;
+    src_cy /= n;
+    dst_cx /= n;
+    dst_cy /= n;
+
+    double cross_term = 0.0;
+    double dot_term = 0.0;
+    for (const auto & p : pairs) {
+      const double xs = p.sx_m - src_cx;
+      const double ys = p.sy_m - src_cy;
+      const double xt = p.tx_m - dst_cx;
+      const double yt = p.ty_m - dst_cy;
+      cross_term += xs * yt - ys * xt;
+      dot_term += xs * xt + ys * yt;
+    }
+    if (std::abs(cross_term) + std::abs(dot_term) <= 1e-12) {
+      return false;
+    }
+
+    const double yaw = std::atan2(cross_term, dot_term);
+    const double c = std::cos(yaw);
+    const double s = std::sin(yaw);
+    m00 = c;
+    m01 = -s;
+    m10 = s;
+    m11 = c;
+    tx = dst_cx - (c * src_cx - s * src_cy);
+    ty = dst_cy - (s * src_cx + c * src_cy);
+    return true;
+  }
+
+  static void computeResidual(
+    const std::vector<RawGoalPair> & pairs,
+    const double m00,
+    const double m01,
+    const double m10,
+    const double m11,
+    const double tx,
+    const double ty,
+    double & rmse_m,
+    double & max_err_m)
+  {
+    rmse_m = 0.0;
+    max_err_m = 0.0;
+    if (pairs.empty()) {
+      return;
+    }
+    double sum_sq = 0.0;
+    for (const auto & p : pairs) {
+      const double px = m00 * p.sx_m + m01 * p.sy_m + tx;
+      const double py = m10 * p.sx_m + m11 * p.sy_m + ty;
+      const double err = std::hypot(px - p.tx_m, py - p.ty_m);
+      sum_sq += err * err;
+      max_err_m = std::max(max_err_m, err);
+    }
+    rmse_m = std::sqrt(sum_sq / static_cast<double>(pairs.size()));
+  }
+
+  void initializeRawGoalStaticCalibration()
+  {
+    raw_goal_static_calibration_ready_ = false;
+    if (!use_raw_goal_static_calibration_) {
+      return;
+    }
+
+    if (raw_goal_target_frame_ != map_frame_) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "raw_goal_target_frame='%s' differs from map_frame='%s'. Converted output is still "
+        "published as map_frame.",
+        raw_goal_target_frame_.c_str(),
+        map_frame_.c_str());
+    }
+
+    std::vector<RawGoalPair> pairs;
+    double unit_scale = 0.01;
+    if (!parseRawGoalPairs(pairs, unit_scale)) {
+      return;
+    }
+
+    bool ok = false;
+    const std::string model = raw_goal_calibration_model_;
+    if (model == "affine" || model == "AFFINE" || model == "affine_2d") {
+      ok = solveAffine2D(
+        pairs,
+        raw_goal_calib_m00_,
+        raw_goal_calib_m01_,
+        raw_goal_calib_m10_,
+        raw_goal_calib_m11_,
+        raw_goal_calib_tx_m_,
+        raw_goal_calib_ty_m_);
+    } else {
+      ok = solveRigid2D(
+        pairs,
+        raw_goal_calib_m00_,
+        raw_goal_calib_m01_,
+        raw_goal_calib_m10_,
+        raw_goal_calib_m11_,
+        raw_goal_calib_tx_m_,
+        raw_goal_calib_ty_m_);
+      if (!ok && !(model == "rigid" || model == "RIGID" || model == "rigid_2d")) {
+        RCLCPP_WARN(
+          this->get_logger(),
+          "Unknown raw_goal_calibration_model='%s', fallback to rigid failed.",
+          raw_goal_calibration_model_.c_str());
+      }
+    }
+
+    if (!ok) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Raw-goal static calibration solve failed. model=%s",
+        raw_goal_calibration_model_.c_str());
+      return;
+    }
+
+    double rmse_m = 0.0;
+    double max_err_m = 0.0;
+    computeResidual(
+      pairs,
+      raw_goal_calib_m00_,
+      raw_goal_calib_m01_,
+      raw_goal_calib_m10_,
+      raw_goal_calib_m11_,
+      raw_goal_calib_tx_m_,
+      raw_goal_calib_ty_m_,
+      rmse_m,
+      max_err_m);
+
+    raw_goal_static_calibration_ready_ = true;
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Raw-goal static calibration ready. model=%s points=%zu unit=%s source_frame=%s "
+      "target_frame=%s matrix=[[%.6f, %.6f, %.6f],[%.6f, %.6f, %.6f]] rmse=%.4fm max=%.4fm",
+      raw_goal_calibration_model_.c_str(),
+      pairs.size(),
+      raw_goal_calibration_unit_.c_str(),
+      raw_goal_source_frame_.c_str(),
+      raw_goal_target_frame_.c_str(),
+      raw_goal_calib_m00_,
+      raw_goal_calib_m01_,
+      raw_goal_calib_tx_m_,
+      raw_goal_calib_m10_,
+      raw_goal_calib_m11_,
+      raw_goal_calib_ty_m_,
+      rmse_m,
+      max_err_m);
+  }
 
   bool parseAreaHeaderPoints(std::vector<NamedPointCm> & points_out) const
   {
@@ -483,6 +872,28 @@ private:
       return;
     }
 
+    if (use_raw_goal_static_calibration_) {
+      if (!raw_goal_static_calibration_ready_) {
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(),
+          *this->get_clock(),
+          2000,
+          "Drop goal_pos_raw because static calibration is enabled but not ready.");
+        return;
+      }
+
+      const double raw_x_m = static_cast<double>(msg->data[0]) * 0.01;
+      const double raw_y_m = static_cast<double>(msg->data[1]) * 0.01;
+      geometry_msgs::msg::Point point_map;
+      point_map.x =
+        raw_goal_calib_m00_ * raw_x_m + raw_goal_calib_m01_ * raw_y_m + raw_goal_calib_tx_m_;
+      point_map.y =
+        raw_goal_calib_m10_ * raw_x_m + raw_goal_calib_m11_ * raw_y_m + raw_goal_calib_ty_m_;
+      point_map.z = 0.0;
+      publishMapPointAsGoal(point_map, "raw_goal_static_calibration");
+      return;
+    }
+
     geometry_msgs::msg::PointStamped point_in;
     point_in.header.frame_id = goal_pos_raw_frame_;
     point_in.header.stamp = this->now();
@@ -592,6 +1003,20 @@ private:
   bool allow_reverse_goal_{false};
   bool enable_goal_pos_raw_bridge_{true};
   std::string goal_pos_raw_frame_{"map"};
+  bool use_raw_goal_static_calibration_{false};
+  std::string raw_goal_calibration_model_{"rigid"};
+  std::string raw_goal_calibration_unit_{"cm"};
+  std::string raw_goal_source_frame_{"official_map"};
+  std::string raw_goal_target_frame_{"map"};
+  std::vector<double> raw_goal_source_points_{};
+  std::vector<double> raw_goal_target_points_{};
+  bool raw_goal_static_calibration_ready_{false};
+  double raw_goal_calib_m00_{1.0};
+  double raw_goal_calib_m01_{0.0};
+  double raw_goal_calib_m10_{0.0};
+  double raw_goal_calib_m11_{1.0};
+  double raw_goal_calib_tx_m_{0.0};
+  double raw_goal_calib_ty_m_{0.0};
   bool debug_export_point_pairs_{true};
   std::string debug_points_reference_frame_{"map"};
   std::string debug_area_header_file_;

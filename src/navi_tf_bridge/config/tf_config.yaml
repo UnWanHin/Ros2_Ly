@@ -22,6 +22,23 @@ target_rel_to_goal_pos_node:
     enable_goal_pos_raw_bridge: true
     goal_pos_raw_frame: map
 
+    # Raw goal static calibration (official-map points -> output map frame)
+    # When enabled:
+    #   /ly/navi/goal_pos_raw is treated as points in raw_goal_source_frame
+    #   and converted by the fitted 2D transform before publishing /ly/navi/goal_pos.
+    # Model:
+    #   rigid  : rotation + translation
+    #   affine : 2x2 linear + translation (supports mirror/scale/shear)
+    use_raw_goal_static_calibration: false
+    raw_goal_calibration_model: affine
+    raw_goal_calibration_unit: cm
+    raw_goal_source_frame: official_map
+    raw_goal_target_frame: map
+    # Flattened point list: [x1, y1, x2, y2, x3, y3, ...]
+    # Keep these two lines commented until you fill real pairs.
+    # raw_goal_source_points: [393, 810, 2408, 683, 980, 1124]
+    # raw_goal_target_points: [402, 796, 2397, 701, 995, 1136]
+
     # Debug export (for comparing Area.hpp map points with TF-converted points)
     debug_export_point_pairs: true
     debug_points_reference_frame: map

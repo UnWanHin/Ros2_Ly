@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import threading
 import time
 from pathlib import Path
@@ -96,6 +97,23 @@ def parse_args() -> argparse.Namespace:
         default=0.2,
         help="Minimum save interval in seconds. Default: 0.2",
     )
+    parser.add_argument(
+        "--no-gui",
+        action="store_true",
+        help="Disable OpenCV window and save frames automatically (for SSH/headless).",
+    )
+    parser.add_argument(
+        "--auto-save-interval",
+        type=float,
+        default=0.8,
+        help="Auto-save interval in no-gui mode (seconds). Default: 0.8",
+    )
+    parser.add_argument(
+        "--max-images",
+        type=int,
+        default=0,
+        help="Stop after N saved images in no-gui mode. 0 means unlimited.",
+    )
     return parser.parse_args()
 
 
@@ -145,6 +163,16 @@ def blank_waiting_frame() -> np.ndarray:
     return frame
 
 
+def save_frame(frame: np.ndarray, session_dir: Path, saved_count: int) -> bool:
+    filename = session_dir / f"img_{saved_count:04d}.png"
+    ok = cv2.imwrite(str(filename), frame)
+    if ok:
+        print(f"[SAVE] {filename}")
+    else:
+        print(f"[WARN] failed to save {filename}")
+    return ok
+
+
 def main() -> int:
     args = parse_args()
     save_root = Path(args.save_root).expanduser().resolve()
@@ -165,38 +193,64 @@ def main() -> int:
 
     saved_count = 0
     last_save_ts = 0.0
+    use_gui = not args.no_gui and bool(os.environ.get("DISPLAY"))
+
+    if not use_gui:
+        print("[INFO] no GUI mode enabled (no DISPLAY or --no-gui).")
+        if args.max_images > 0:
+            print(f"[INFO] will stop after {args.max_images} images.")
+        print("[INFO] press Ctrl+C to stop.")
 
     try:
+        if use_gui:
+            try:
+                cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+            except cv2.error:
+                print("[WARN] GUI backend unavailable, fallback to no-gui mode.")
+                use_gui = False
+
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.02)
             frame = node.latest_frame()
-            if frame is None:
-                display = blank_waiting_frame()
+
+            if use_gui:
+                if frame is None:
+                    display = blank_waiting_frame()
+                else:
+                    display = draw_overlay(frame, session_dir, saved_count)
+
+                cv2.imshow(WINDOW_NAME, display)
+                key = cv2.waitKey(10) & 0xFF
+
+                if key in (27, ord("q")):
+                    break
+
+                if key == ord("s") and frame is not None:
+                    now = time.time()
+                    if now - last_save_ts < args.min_interval:
+                        continue
+                    if save_frame(frame, session_dir, saved_count):
+                        saved_count += 1
+                        last_save_ts = now
             else:
-                display = draw_overlay(frame, session_dir, saved_count)
-
-            cv2.imshow(WINDOW_NAME, display)
-            key = cv2.waitKey(10) & 0xFF
-
-            if key in (27, ord("q")):
-                break
-
-            if key == ord("s") and frame is not None:
-                now = time.time()
-                if now - last_save_ts < args.min_interval:
+                if frame is None:
+                    time.sleep(0.05)
                     continue
-                filename = session_dir / f"img_{saved_count:04d}.png"
-                ok = cv2.imwrite(str(filename), frame)
-                if ok:
-                    print(f"[SAVE] {filename}")
+                now = time.time()
+                if now - last_save_ts < args.auto_save_interval:
+                    time.sleep(0.01)
+                    continue
+                if save_frame(frame, session_dir, saved_count):
                     saved_count += 1
                     last_save_ts = now
-                else:
-                    print(f"[WARN] failed to save {filename}")
+                if args.max_images > 0 and saved_count >= args.max_images:
+                    print("[INFO] reached --max-images, exiting.")
+                    break
     finally:
         node.destroy_node()
         rclpy.shutdown()
-        cv2.destroyAllWindows()
+        if use_gui:
+            cv2.destroyAllWindows()
 
     print(f"[INFO] done. total saved: {saved_count}")
     return 0
