@@ -17,6 +17,26 @@ bool EnvEnabled(const char* key, bool default_value) {
     const std::string s(v);
     return s == "1" || s == "true" || s == "TRUE" || s == "on" || s == "ON";
 }
+
+std::string EnvString(const char* key, const char* default_value) {
+    const char* v = std::getenv(key);
+    if (!v || !*v) {
+        return std::string(default_value);
+    }
+    return std::string(v);
+}
+
+int EnvInt(const char* key, int default_value) {
+    const char* v = std::getenv(key);
+    if (!v || !*v) {
+        return default_value;
+    }
+    try {
+        return std::stoi(v);
+    } catch (...) {
+        return default_value;
+    }
+}
 } // namespace
 
 bool Application::LoadBehaviorTree() noexcept {
@@ -33,20 +53,45 @@ bool Application::LoadBehaviorTree() noexcept {
 
         // 稳定性优先：默认关闭 BT 调试附加器，避免在实机环境引入额外崩溃面。
         // 如需开启，导出环境变量：
+        //   BT_ENABLE_COUT_LOGGER=1
         //   BT_ENABLE_FILE_LOGGER=1
+        //   BT_ENABLE_MINITRACE=1
         //   BT_ENABLE_GROOT=1
+        // 可选参数：
+        //   BT_FILE_LOG_PATH=/abs/path/trace.btlog
+        //   BT_MINITRACE_FILE=/abs/path/trace.json
+        //   BT_GROOT_PORT=1667
+        if (EnvEnabled("BT_ENABLE_COUT_LOGGER", false)) {
+            try {
+                btCoutLogger_ = std::make_unique<BT::StdCoutLogger>(BTree);
+                LoggerPtr->Info("BT cout logger enabled.");
+            } catch (const std::exception& ex) {
+                LoggerPtr->Warning("BT cout logger init failed: {}", ex.what());
+            }
+        }
         if (EnvEnabled("BT_ENABLE_FILE_LOGGER", false)) {
             try {
-                btFileLogger_ = std::make_unique<BT::FileLogger2>(BTree, "behavior_tree_trace.fbl");
-                LoggerPtr->Info("BT file logger enabled.");
+                const auto file_log_path = EnvString("BT_FILE_LOG_PATH", "behavior_tree_trace.btlog");
+                btFileLogger_ = std::make_unique<BT::FileLogger2>(BTree, file_log_path);
+                LoggerPtr->Info("BT file logger enabled: {}", file_log_path);
             } catch (const std::exception& ex) {
                 LoggerPtr->Warning("BT file logger init failed: {}", ex.what());
             }
         }
+        if (EnvEnabled("BT_ENABLE_MINITRACE", false)) {
+            try {
+                const auto minitrace_file = EnvString("BT_MINITRACE_FILE", "behavior_tree_trace.json");
+                btMinitraceLogger_ = std::make_unique<BT::MinitraceLogger>(BTree, minitrace_file.c_str());
+                LoggerPtr->Info("BT minitrace logger enabled: {}", minitrace_file);
+            } catch (const std::exception& ex) {
+                LoggerPtr->Warning("BT minitrace logger init failed: {}", ex.what());
+            }
+        }
         if (EnvEnabled("BT_ENABLE_GROOT", false)) {
             try {
-                btGrootPublisher_ = std::make_unique<BT::Groot2Publisher>(BTree, 1667);
-                LoggerPtr->Info("BT Groot publisher enabled on port 1667.");
+                const int groot_port = EnvInt("BT_GROOT_PORT", 1667);
+                btGrootPublisher_ = std::make_unique<BT::Groot2Publisher>(BTree, static_cast<uint16_t>(groot_port));
+                LoggerPtr->Info("BT Groot publisher enabled on port {}.", groot_port);
             } catch (const std::exception& ex) {
                 LoggerPtr->Warning("BT Groot publisher init failed: {}", ex.what());
             }

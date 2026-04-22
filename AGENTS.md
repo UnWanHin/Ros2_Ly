@@ -54,3 +54,11 @@ This repository is a ROS2 workspace built with `colcon`.
 - Do not add broad defensive guards, fallback layers, retries, or compatibility shims unless a concrete failure mode is proven and approved.
 - Do not perform chain/link rerouting or coverage-style rewiring unless explicitly required and validated.
 - Preserve external contracts (topics, messages, APIs, config keys) unless interface change is the explicit task.
+
+## Skill Auto-Match & Auto-Install
+- Automatically match and use the minimal relevant skill set when user intent clearly maps to available skills.
+- If a required skill is missing locally, automatically try to install it with `$skill-installer` (curated first, then explicit GitHub path if needed).
+- Prefer trusted/local sources in this order when possible: workspace/local skills, curated skills, pinned GitHub repo path.
+- If auto-install fails (network, permission, missing repo, incompatible skill), continue with the best fallback workflow instead of blocking the task.
+- Do not run destructive or privileged actions for skill installation/configuration unless explicitly requested by the user.
+- Briefly report which skill was auto-matched/auto-installed and whether fallback mode was used.

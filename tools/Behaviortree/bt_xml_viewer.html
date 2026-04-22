@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BT XML Viewer</title>
+  <style>
+    :root {
+      --bg-0: #eff3f8;
+      --bg-1: #f7f9fc;
+      --panel: #ffffff;
+      --text: #15202c;
+      --muted: #5d6c7a;
+      --line: #c9d4df;
+      --focus: #1a73e8;
+      --ok: #12643a;
+      --warn: #8a5a00;
+      --danger: #a01f1f;
+      --node: #f9fbfd;
+      --match: #fff8dc;
+      --ctrl: #dbeafe;
+      --ctrl-border: #93c5fd;
+      --decor: #f3e8ff;
+      --decor-border: #c4b5fd;
+      --leaf: #dcfce7;
+      --leaf-border: #86efac;
+      --subtree: #ffedd5;
+      --subtree-border: #fdba74;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+      background:
+        radial-gradient(1200px 500px at 80% -100px, #dbeafe 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+    }
+
+    .wrap {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid #d8e1ea;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      letter-spacing: 0.01em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .toolbar {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .row .grow {
+      flex: 1 1 320px;
+      min-width: 240px;
+    }
+
+    button, select, input[type="text"], input[type="number"] {
+      height: 36px;
+      border: 1px solid #b8c7d6;
+      border-radius: 9px;
+      padding: 0 10px;
+      color: var(--text);
+      background: #fff;
+      font-size: 14px;
+    }
+
+    button {
+      border-color: #9ec5ef;
+      background: #edf5ff;
+      color: #0f4f8d;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #dcecff;
+    }
+
+    button:disabled, select:disabled, input:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .secondary {
+      background: #f5f7fa;
+      border-color: #d4dde7;
+      color: #3d4b59;
+    }
+
+    .inline-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      user-select: none;
+    }
+
+    .status {
+      margin-top: 2px;
+      border: 1px solid #d9e3ee;
+      border-radius: 9px;
+      padding: 8px 10px;
+      background: #f3f7fb;
+      color: #385067;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+
+    .status.error {
+      border-color: #f4b3b3;
+      background: #ffeaea;
+      color: #8f1f1f;
+    }
+
+    .stats {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tree-panel {
+      min-height: 320px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border: 1px solid transparent;
+    }
+
+    .chip.ctrl {
+      background: var(--ctrl);
+      border-color: var(--ctrl-border);
+      color: #1d4ed8;
+    }
+
+    .chip.decor {
+      background: var(--decor);
+      border-color: var(--decor-border);
+      color: #6d28d9;
+    }
+
+    .chip.leaf {
+      background: var(--leaf);
+      border-color: var(--leaf-border);
+      color: #166534;
+    }
+
+    .chip.subtree {
+      background: var(--subtree);
+      border-color: var(--subtree-border);
+      color: #9a3412;
+    }
+
+    .tree-root {
+      overflow: auto;
+      padding-bottom: 16px;
+    }
+
+    ul.bt {
+      list-style: none;
+      margin: 0;
+      padding-left: 30px;
+      position: relative;
+    }
+
+    ul.bt::before {
+      content: "";
+      position: absolute;
+      left: 11px;
+      top: 0;
+      bottom: 0;
+      border-left: 1px solid var(--line);
+    }
+
+    li.bt-node {
+      position: relative;
+      margin: 8px 0;
+    }
+
+    li.bt-node::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      left: -19px;
+      width: 19px;
+      border-top: 1px solid var(--line);
+    }
+
+    .node-row {
+      min-height: 34px;
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid #cfd9e4;
+      border-radius: 9px;
+      padding: 6px 10px;
+      background: var(--node);
+    }
+
+    .node-row:hover {
+      border-color: #9fc0df;
+      box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.08);
+    }
+
+    .node-row.kind-control {
+      background: linear-gradient(0deg, #f4f8ff 0%, #ffffff 100%);
+      border-left: 5px solid var(--ctrl-border);
+    }
+
+    .node-row.kind-decorator {
+      background: linear-gradient(0deg, #faf5ff 0%, #ffffff 100%);
+      border-left: 5px solid var(--decor-border);
+    }
+
+    .node-row.kind-leaf {
+      background: linear-gradient(0deg, #f4fff7 0%, #ffffff 100%);
+      border-left: 5px solid var(--leaf-border);
+    }
+
+    .node-row.kind-subtree {
+      background: linear-gradient(0deg, #fff8ef 0%, #ffffff 100%);
+      border-left: 5px solid var(--subtree-border);
+    }
+
+    .node-row.match {
+      background: var(--match);
+      box-shadow: 0 0 0 2px rgba(247, 181, 0, 0.28);
+    }
+
+    .toggle {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 1px solid #bed0e1;
+      background: #fff;
+      color: #2e4c68;
+      font-size: 12px;
+      line-height: 18px;
+      text-align: center;
+      padding: 0;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .toggle.placeholder {
+      visibility: hidden;
+      cursor: default;
+    }
+
+    .tag {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: #0e5b9c;
+      background: #e6f2ff;
+      border: 1px solid #c3def9;
+      border-radius: 999px;
+      padding: 2px 8px;
+      text-transform: uppercase;
+    }
+
+    .label {
+      font-size: 14px;
+      font-weight: 700;
+      color: #122333;
+    }
+
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+      border-left: 1px solid #d6e1ec;
+      padding-left: 8px;
+      word-break: break-all;
+    }
+
+    .tree-root.hide-meta .meta {
+      display: none;
+    }
+
+    .depth {
+      font-size: 11px;
+      font-weight: 700;
+      color: #5a6b7f;
+      background: #eef3f8;
+      border: 1px solid #d2dce7;
+      border-radius: 999px;
+      padding: 2px 7px;
+    }
+
+    .subtree-flag {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--warn);
+      background: #fff4df;
+      border: 1px solid #f2d4a3;
+      border-radius: 999px;
+      padding: 2px 8px;
+      text-transform: uppercase;
+    }
+
+    .cycle {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--danger);
+      background: #ffe4e4;
+      border: 1px solid #f2b8b8;
+      border-radius: 999px;
+      padding: 2px 8px;
+      text-transform: uppercase;
+    }
+
+    .children.collapsed {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel hero">
+      <h1>BehaviorTree XML Viewer</h1>
+      <p>Offline only. Load XML, inspect full tree structure, fold by depth, and search node paths.</p>
+    </div>
+
+    <div class="panel toolbar">
+      <div class="row">
+        <input id="fileInput" type="file" accept=".xml,text/xml,application/xml" />
+        <button id="loadExampleBtn" type="button">Load Default Main XML</button>
+        <input id="xmlPathInput" class="grow" type="text" placeholder="Optional HTTP path, e.g. /src/behavior_tree/Scripts/main.xml" />
+        <button id="loadPathBtn" type="button">Load Path</button>
+      </div>
+
+      <div class="row">
+        <select id="treeSelect" disabled>
+          <option value="">Select tree id</option>
+        </select>
+        <button id="renderBtn" type="button" disabled>Render</button>
+        <input id="searchInput" class="grow" type="text" placeholder="Search node/tag/attrs..." />
+        <button id="searchBtn" class="secondary" type="button" disabled>Find</button>
+        <button id="clearSearchBtn" class="secondary" type="button" disabled>Clear Find</button>
+      </div>
+
+      <div class="row">
+        <button id="expandAllBtn" class="secondary" type="button" disabled>Expand All</button>
+        <button id="collapseAllBtn" class="secondary" type="button" disabled>Collapse All</button>
+        <input id="depthInput" type="number" min="0" max="30" step="1" value="2" />
+        <button id="collapseDepthBtn" class="secondary" type="button" disabled>Collapse To Depth</button>
+        <label class="inline-label">
+          <input id="showMetaToggle" type="checkbox" />
+          Show Attributes
+        </label>
+      </div>
+
+      <div id="status" class="status">No XML loaded.</div>
+      <div id="stats" class="stats"></div>
+    </div>
+
+    <div class="panel tree-panel">
+      <div class="legend">
+        <span class="chip ctrl">Control</span>
+        <span class="chip decor">Decorator</span>
+        <span class="chip leaf">Leaf</span>
+        <span class="chip subtree">SubTree</span>
+      </div>
+      <div id="canvas" class="tree-root hide-meta"></div>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const treeSelect = document.getElementById("treeSelect");
+    const renderBtn = document.getElementById("renderBtn");
+    const loadExampleBtn = document.getElementById("loadExampleBtn");
+    const xmlPathInput = document.getElementById("xmlPathInput");
+    const loadPathBtn = document.getElementById("loadPathBtn");
+    const searchInput = document.getElementById("searchInput");
+    const searchBtn = document.getElementById("searchBtn");
+    const clearSearchBtn = document.getElementById("clearSearchBtn");
+    const expandAllBtn = document.getElementById("expandAllBtn");
+    const collapseAllBtn = document.getElementById("collapseAllBtn");
+    const depthInput = document.getElementById("depthInput");
+    const collapseDepthBtn = document.getElementById("collapseDepthBtn");
+    const showMetaToggle = document.getElementById("showMetaToggle");
+    const statusEl = document.getElementById("status");
+    const statsEl = document.getElementById("stats");
+    const canvas = document.getElementById("canvas");
+
+    const CONTROL_TAGS = new Set([
+      "Sequence", "SequenceStar", "ReactiveSequence",
+      "Fallback", "ReactiveFallback",
+      "Parallel", "ParallelAll", "ParallelOne",
+      "WhileDoElse", "IfThenElse"
+    ]);
+
+    const DECORATOR_TAGS = new Set([
+      "Inverter", "RetryUntilSuccessful", "RetryUntilFailure",
+      "Repeat", "KeepRunningUntilFailure", "Timeout",
+      "Delay", "ForceSuccess", "ForceFailure",
+      "RunOnce", "SubTreePlus", "Precondition"
+    ]);
+
+    let xmlDoc = null;
+    let behaviorTrees = new Map();
+    let mainTreeId = "";
+    let currentRenderTreeId = "";
+    let currentNodeCount = 0;
+    let currentMaxDepth = 0;
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle("error", !!isError);
+    }
+
+    function setInteractiveEnabled(enabled) {
+      renderBtn.disabled = !enabled;
+      treeSelect.disabled = !enabled;
+      expandAllBtn.disabled = !enabled;
+      collapseAllBtn.disabled = !enabled;
+      collapseDepthBtn.disabled = !enabled;
+      searchBtn.disabled = !enabled;
+      clearSearchBtn.disabled = !enabled;
+    }
+
+    function clearState() {
+      xmlDoc = null;
+      behaviorTrees = new Map();
+      mainTreeId = "";
+      currentRenderTreeId = "";
+      currentNodeCount = 0;
+      currentMaxDepth = 0;
+      treeSelect.innerHTML = "<option value=\"\">Select tree id</option>";
+      canvas.innerHTML = "";
+      statsEl.textContent = "";
+      setInteractiveEnabled(false);
+    }
+
+    function getDirectBehaviorTrees(rootEl) {
+      const trees = [];
+      for (const child of rootEl.children) {
+        if (child.tagName === "BehaviorTree") {
+          trees.push(child);
+        }
+      }
+      return trees;
+    }
+
+    function parseXmlText(xmlText, sourceName) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, "application/xml");
+      const parserError = doc.querySelector("parsererror");
+      if (parserError) {
+        throw new Error("XML parse failed: " + parserError.textContent.trim());
+      }
+
+      const root = doc.documentElement;
+      if (!root || root.tagName !== "root") {
+        throw new Error("Invalid BT XML: missing <root>.");
+      }
+
+      const btList = getDirectBehaviorTrees(root);
+      if (!btList.length) {
+        throw new Error("No <BehaviorTree ID=\"...\"> found.");
+      }
+
+      const map = new Map();
+      btList.forEach((bt) => {
+        const id = bt.getAttribute("ID") || "";
+        if (id) {
+          map.set(id, bt);
+        }
+      });
+
+      if (!map.size) {
+        throw new Error("BehaviorTree IDs are empty.");
+      }
+
+      const mainId = root.getAttribute("main_tree_to_execute") || "";
+      xmlDoc = doc;
+      behaviorTrees = map;
+      mainTreeId = mainId && map.has(mainId) ? mainId : map.keys().next().value;
+
+      treeSelect.innerHTML = "<option value=\"\">Select tree id</option>";
+      [...map.keys()].forEach((id) => {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = id;
+        treeSelect.appendChild(option);
+      });
+      treeSelect.value = mainTreeId;
+
+      setInteractiveEnabled(true);
+      setStatus(
+        "Loaded: " + sourceName +
+        "\nBehaviorTree count: " + map.size +
+        "\nmain_tree_to_execute: " + (mainTreeId || "<none>")
+      );
+      renderSelectedTree();
+    }
+
+    function getTreeRootNode(btEl) {
+      for (const child of btEl.children) {
+        if (child.tagName !== "TreeNodesModel") {
+          return child;
+        }
+      }
+      return null;
+    }
+
+    function summarizeAttrs(el) {
+      const attrs = [];
+      const prefer = ["name", "ID", "_autoremap"];
+      prefer.forEach((key) => {
+        if (el.hasAttribute(key)) {
+          attrs.push(key + "=" + el.getAttribute(key));
+        }
+      });
+
+      for (const attr of el.attributes) {
+        if (!prefer.includes(attr.name)) {
+          attrs.push(attr.name + "=" + attr.value);
+        }
+      }
+      return attrs.join(", ");
+    }
+
+    function classifyTag(tagName) {
+      if (tagName === "SubTree") return "subtree";
+      if (CONTROL_TAGS.has(tagName)) return "control";
+      if (DECORATOR_TAGS.has(tagName)) return "decorator";
+      return "leaf";
+    }
+
+    function buildNodeModel(xmlNode, stackIds, depth) {
+      const tagName = xmlNode.tagName;
+      const model = {
+        tag: tagName,
+        kind: classifyTag(tagName),
+        label: xmlNode.getAttribute("name") || xmlNode.getAttribute("ID") || tagName,
+        meta: summarizeAttrs(xmlNode),
+        depth,
+        isSubtreeRef: false,
+        isCycle: false,
+        children: []
+      };
+
+      if (tagName === "SubTree") {
+        const subId = xmlNode.getAttribute("ID") || "";
+        model.isSubtreeRef = true;
+        model.label = subId ? ("SubTree: " + subId) : "SubTree";
+
+        if (!subId || !behaviorTrees.has(subId)) {
+          model.meta = subId ? ("missing subtree: " + subId) : "missing subtree ID";
+          return model;
+        }
+
+        if (stackIds.includes(subId)) {
+          model.isCycle = true;
+          model.meta = "cycle: " + [...stackIds, subId].join(" -> ");
+          return model;
+        }
+
+        const subTreeEl = behaviorTrees.get(subId);
+        const subRoot = getTreeRootNode(subTreeEl);
+        if (!subRoot) {
+          model.meta = "subtree is empty";
+          return model;
+        }
+
+        model.children.push(buildNodeModel(subRoot, [...stackIds, subId], depth + 1));
+        return model;
+      }
+
+      for (const child of xmlNode.children) {
+        if (child.tagName === "TreeNodesModel") continue;
+        model.children.push(buildNodeModel(child, stackIds, depth + 1));
+      }
+      return model;
+    }
+
+    function countModel(model) {
+      let count = 1;
+      let maxDepth = model.depth;
+      model.children.forEach((child) => {
+        const { count: c, maxDepth: d } = countModel(child);
+        count += c;
+        if (d > maxDepth) maxDepth = d;
+      });
+      return { count, maxDepth };
+    }
+
+    function updateToggleVisual(button, collapsed) {
+      if (!button || button.classList.contains("placeholder")) return;
+      button.textContent = collapsed ? "+" : "-";
+      button.title = collapsed ? "Expand" : "Collapse";
+    }
+
+    function setCollapsed(li, collapsed) {
+      const childList = li.querySelector(":scope > ul.children");
+      if (!childList) return;
+      const toggleBtn = li.querySelector(":scope > .node-row > .toggle");
+      childList.classList.toggle("collapsed", collapsed);
+      updateToggleVisual(toggleBtn, collapsed);
+    }
+
+    function openAncestorPath(rowEl) {
+      let currentLi = rowEl.closest("li.bt-node");
+      while (currentLi) {
+        const parentUl = currentLi.parentElement;
+        if (parentUl && parentUl.classList.contains("children")) {
+          const ownerLi = parentUl.parentElement;
+          if (ownerLi && ownerLi.matches("li.bt-node")) {
+            setCollapsed(ownerLi, false);
+            currentLi = ownerLi;
+            continue;
+          }
+        }
+        break;
+      }
+    }
+
+    function renderModel(nodeModel) {
+      const li = document.createElement("li");
+      li.className = "bt-node";
+      li.dataset.depth = String(nodeModel.depth);
+
+      const row = document.createElement("div");
+      row.className = "node-row kind-" + nodeModel.kind;
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "toggle";
+      row.appendChild(toggle);
+
+      const depth = document.createElement("span");
+      depth.className = "depth";
+      depth.textContent = "d" + nodeModel.depth;
+      row.appendChild(depth);
+
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = nodeModel.tag;
+      row.appendChild(tag);
+
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = nodeModel.label;
+      row.appendChild(label);
+
+      if (nodeModel.isSubtreeRef) {
+        const flag = document.createElement("span");
+        flag.className = nodeModel.isCycle ? "cycle" : "subtree-flag";
+        flag.textContent = nodeModel.isCycle ? "cycle" : "subtree";
+        row.appendChild(flag);
+      }
+
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent = nodeModel.meta || "";
+      row.appendChild(meta);
+
+      row.dataset.searchText = [
+        nodeModel.tag,
+        nodeModel.label,
+        nodeModel.meta || ""
+      ].join(" ").toLowerCase();
+
+      li.appendChild(row);
+
+      if (nodeModel.children.length) {
+        const childUl = document.createElement("ul");
+        childUl.className = "bt children";
+        nodeModel.children.forEach((child) => childUl.appendChild(renderModel(child)));
+        li.appendChild(childUl);
+        updateToggleVisual(toggle, false);
+        toggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const nowCollapsed = !childUl.classList.contains("collapsed");
+          setCollapsed(li, nowCollapsed);
+        });
+      } else {
+        toggle.classList.add("placeholder");
+        toggle.disabled = true;
+      }
+
+      row.addEventListener("click", () => {
+        const childUl = li.querySelector(":scope > ul.children");
+        if (!childUl) return;
+        const nowCollapsed = !childUl.classList.contains("collapsed");
+        setCollapsed(li, nowCollapsed);
+      });
+
+      return li;
+    }
+
+    function renderSelectedTree() {
+      if (!xmlDoc) return;
+      const treeId = treeSelect.value || mainTreeId;
+      if (!treeId || !behaviorTrees.has(treeId)) {
+        setStatus("Invalid tree selection.", true);
+        return;
+      }
+
+      const btEl = behaviorTrees.get(treeId);
+      const rootNode = getTreeRootNode(btEl);
+      if (!rootNode) {
+        setStatus("Selected tree is empty: " + treeId, true);
+        return;
+      }
+
+      const model = buildNodeModel(rootNode, [treeId], 0);
+      const summary = countModel(model);
+      currentNodeCount = summary.count;
+      currentMaxDepth = summary.maxDepth;
+      currentRenderTreeId = treeId;
+
+      const topUl = document.createElement("ul");
+      topUl.className = "bt";
+      topUl.appendChild(renderModel(model));
+
+      canvas.innerHTML = "";
+      canvas.appendChild(topUl);
+
+      collapseBeyondDepth(Number(depthInput.value || 2));
+
+      statsEl.textContent =
+        "Tree: " + treeId +
+        " | Nodes: " + currentNodeCount +
+        " | Max Depth: " + currentMaxDepth;
+
+      setStatus("Rendered tree: " + treeId + ". Click node or +/- to fold.");
+    }
+
+    function forEachNodeWithChildren(callback) {
+      const nodes = canvas.querySelectorAll("li.bt-node");
+      nodes.forEach((li) => {
+        const child = li.querySelector(":scope > ul.children");
+        if (child) callback(li, child);
+      });
+    }
+
+    function expandAll() {
+      forEachNodeWithChildren((li) => setCollapsed(li, false));
+    }
+
+    function collapseAll() {
+      forEachNodeWithChildren((li) => setCollapsed(li, true));
+    }
+
+    function collapseBeyondDepth(maxVisibleDepth) {
+      if (!Number.isFinite(maxVisibleDepth) || maxVisibleDepth < 0) {
+        maxVisibleDepth = 0;
+      }
+      forEachNodeWithChildren((li) => {
+        const depth = Number(li.dataset.depth || "0");
+        const collapse = depth >= maxVisibleDepth;
+        setCollapsed(li, collapse);
+      });
+    }
+
+    function clearMatches() {
+      const matched = canvas.querySelectorAll(".node-row.match");
+      matched.forEach((el) => el.classList.remove("match"));
+    }
+
+    function doSearch() {
+      clearMatches();
+      const q = (searchInput.value || "").trim().toLowerCase();
+      if (!q) {
+        setStatus("Search cleared.");
+        return;
+      }
+
+      let found = 0;
+      const rows = canvas.querySelectorAll(".node-row");
+      rows.forEach((row) => {
+        const text = row.dataset.searchText || "";
+        if (text.includes(q)) {
+          row.classList.add("match");
+          openAncestorPath(row);
+          found++;
+        }
+      });
+
+      if (found > 0) {
+        const first = canvas.querySelector(".node-row.match");
+        if (first) {
+          first.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        setStatus("Found " + found + " matched node(s) for: " + q);
+      } else {
+        setStatus("No match for: " + q, true);
+      }
+    }
+
+    async function loadXmlFromPath(pathText) {
+      const path = (pathText || "").trim();
+      if (!path) {
+        setStatus("Path is empty.", true);
+        return;
+      }
+      const response = await fetch(path, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("HTTP " + response.status + " for " + path);
+      }
+      const text = await response.text();
+      parseXmlText(text, path);
+    }
+
+    function updateMetaVisibility() {
+      canvas.classList.toggle("hide-meta", !showMetaToggle.checked);
+    }
+
+    fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      clearState();
+      try {
+        const text = await file.text();
+        parseXmlText(text, file.name);
+      } catch (err) {
+        setStatus(String(err && err.message ? err.message : err), true);
+      }
+    });
+
+    loadPathBtn.addEventListener("click", async () => {
+      clearState();
+      try {
+        await loadXmlFromPath(xmlPathInput.value);
+      } catch (err) {
+        setStatus(String(err && err.message ? err.message : err), true);
+      }
+    });
+
+    loadExampleBtn.addEventListener("click", async () => {
+      clearState();
+      try {
+        await loadXmlFromPath("/src/behavior_tree/Scripts/main.xml");
+      } catch (err) {
+        setStatus(
+          "Default path failed. Use file picker or start HTTP server.\n" +
+          String(err && err.message ? err.message : err),
+          true
+        );
+      }
+    });
+
+    renderBtn.addEventListener("click", () => {
+      try {
+        renderSelectedTree();
+      } catch (err) {
+        setStatus(String(err && err.message ? err.message : err), true);
+      }
+    });
+
+    treeSelect.addEventListener("change", () => {
+      try {
+        renderSelectedTree();
+      } catch (err) {
+        setStatus(String(err && err.message ? err.message : err), true);
+      }
+    });
+
+    expandAllBtn.addEventListener("click", () => {
+      expandAll();
+      setStatus("Expanded all.");
+    });
+
+    collapseAllBtn.addEventListener("click", () => {
+      collapseAll();
+      setStatus("Collapsed all.");
+    });
+
+    collapseDepthBtn.addEventListener("click", () => {
+      const depth = Number(depthInput.value || 0);
+      collapseBeyondDepth(depth);
+      setStatus("Collapsed beyond depth " + depth + ".");
+    });
+
+    searchBtn.addEventListener("click", doSearch);
+    clearSearchBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      clearMatches();
+      setStatus("Search cleared.");
+    });
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        doSearch();
+      }
+    });
+
+    showMetaToggle.addEventListener("change", updateMetaVisibility);
+    updateMetaVisibility();
+
+    (async function loadFromQuery() {
+      const params = new URLSearchParams(window.location.search);
+      const xmlPath = params.get("xml");
+      if (!xmlPath) return;
+      clearState();
+      try {
+        await loadXmlFromPath(xmlPath);
+      } catch (err) {
+        setStatus(String(err && err.message ? err.message : err), true);
+      }
+    })();
+  </script>
+</body>
+</html>

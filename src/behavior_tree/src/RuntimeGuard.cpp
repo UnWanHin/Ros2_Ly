@@ -208,7 +208,9 @@ bool Application::TrySoftReloadBehaviorTree(const RuntimeFaultCode code) {
 
     try {
         btGrootPublisher_.reset();
+        btMinitraceLogger_.reset();
         btFileLogger_.reset();
+        btCoutLogger_.reset();
         BTree = BT::Tree{};
 
         if (!GlobalBlackboard_) {

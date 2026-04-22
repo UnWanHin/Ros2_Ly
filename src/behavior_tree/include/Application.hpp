@@ -9,7 +9,9 @@
 #include <behaviortree_cpp/blackboard.h>
 #include <behaviortree_cpp/bt_factory.h>
 #include <behaviortree_cpp/condition_node.h>
+#include <behaviortree_cpp/loggers/bt_cout_logger.h>
 #include <behaviortree_cpp/loggers/bt_file_logger_v2.h>
+#include <behaviortree_cpp/loggers/bt_minitrace_logger.h>
 // bt_zmq_publisher.h 在 BT.CPP v4 已移除，改用 groot2_publisher
 #include <behaviortree_cpp/loggers/groot2_publisher.h>
 
@@ -259,7 +261,9 @@ private:
     BT::Blackboard::Ptr TickBlackboard_ = BT::Blackboard::create();   // 每次 tick 中间黑板
     BT::BehaviorTreeFactory Factory{}; // 行为树工厂
     BT::Tree BTree{}; // 行为树
+    std::unique_ptr<BT::StdCoutLogger> btCoutLogger_; // bt_cout_logger
     std::unique_ptr<BT::FileLogger2> btFileLogger_; // bt_file_logger_v2
+    std::unique_ptr<BT::MinitraceLogger> btMinitraceLogger_; // bt_minitrace_logger
     std::unique_ptr<BT::Groot2Publisher> btGrootPublisher_; // Groot2
     // ==========================================
 
