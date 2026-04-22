@@ -378,11 +378,9 @@ namespace LangYa
         bool ReuseLatchedAnglesOnNoTarget{true};
     };
 
-    // 巡逻扫描配置（单位沿用旧实现：角度步进=deg/tick）
+    // 巡逻扫描配置
     struct PatrolScanSetting {
-        int Mode{1}; // 1=原始单向/受击抖扫, 2=左右摆头（围绕中心 ±HalfRangeDeg）
-        float HalfRangeDeg{180.0f};
-        float YawStepPerTick{9.0f};
+        int Mode{1}; // 1=原始单向/受击抖扫, 2=左右摆头（幅度/步进由 GameLoop 常量决定）
     };
 
     // 频率相关
@@ -461,20 +459,20 @@ namespace LangYa
 
         // 与目标保持的最佳距离（单位：cm）
         int PreferredDistanceCm{100};
-        int DistanceDeadbandCm{60};
+        int DistanceDeadbandCm{5};
         int MinValidDistanceCm{80};
         int MaxValidDistanceCm{1200};
 
         // 追击速度控制
-        double DistanceKp{0.06};
-        int MaxForwardSpeed{35};
-        int MaxBackwardSpeed{25};
+        double DistanceKp{0.3};
+        int MaxForwardSpeed{150};
+        int MaxBackwardSpeed{95};
 
         // 侧向修正（基于云台 yaw 误差）
         bool UseYawStrafe{true};
-        double YawKp{0.4};
-        int YawDeadbandDeg{3};
-        int MaxStrafeSpeed{22};
+        double YawKp{1.8};
+        int YawDeadbandDeg{1};
+        int MaxStrafeSpeed{90};
         bool InvertStrafeDirection{false};
     };
 

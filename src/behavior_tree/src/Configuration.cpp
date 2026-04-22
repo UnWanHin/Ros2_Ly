@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <filesystem>
 
 namespace {
@@ -171,8 +170,6 @@ namespace LangYa {
 
     void from_json(const json& j, PatrolScanSetting& ps) {
         ps.Mode = j.value("Mode", ps.Mode);
-        ps.HalfRangeDeg = j.value("HalfRangeDeg", ps.HalfRangeDeg);
-        ps.YawStepPerTick = j.value("YawStepPerTick", ps.YawStepPerTick);
     }
 
     void from_json(const json& j, Rate& r) {
@@ -429,8 +426,6 @@ namespace BehaviorTree {
         LoggerPtr->Debug("ReuseLatchedAnglesOnNoTarget: {}", config.AimDebugSettings.ReuseLatchedAnglesOnNoTarget);
         LoggerPtr->Debug("------ PatrolScan ------");
         LoggerPtr->Debug("Mode: {}", config.PatrolScanSettings.Mode);
-        LoggerPtr->Debug("HalfRangeDeg: {}", config.PatrolScanSettings.HalfRangeDeg);
-        LoggerPtr->Debug("YawStepPerTick: {}", config.PatrolScanSettings.YawStepPerTick);
         LoggerPtr->Debug("------ Rate ------");
         LoggerPtr->Debug("FireRate: {}", config.RateSettings.FireRate);
         LoggerPtr->Debug("TickRate: {}", config.RateSettings.TreeTickRate);
@@ -691,21 +686,6 @@ namespace BehaviorTree {
         if (config.PatrolScanSettings.Mode != 1 && config.PatrolScanSettings.Mode != 2) {
             LoggerPtr->Warning("Invalid PatrolScan.Mode={}, fallback to 1.", config.PatrolScanSettings.Mode);
             config.PatrolScanSettings.Mode = 1;
-        }
-        if (!std::isfinite(config.PatrolScanSettings.HalfRangeDeg) ||
-            config.PatrolScanSettings.HalfRangeDeg <= 0.0f ||
-            config.PatrolScanSettings.HalfRangeDeg > 180.0f) {
-            LoggerPtr->Warning(
-                "Invalid PatrolScan.HalfRangeDeg={}, fallback to 180.",
-                config.PatrolScanSettings.HalfRangeDeg);
-            config.PatrolScanSettings.HalfRangeDeg = 180.0f;
-        }
-        if (!std::isfinite(config.PatrolScanSettings.YawStepPerTick) ||
-            config.PatrolScanSettings.YawStepPerTick <= 0.0f) {
-            LoggerPtr->Warning(
-                "Invalid PatrolScan.YawStepPerTick={}, fallback to 9.",
-                config.PatrolScanSettings.YawStepPerTick);
-            config.PatrolScanSettings.YawStepPerTick = 9.0f;
         }
 
         const std::vector<int> default_aim_target_priority{

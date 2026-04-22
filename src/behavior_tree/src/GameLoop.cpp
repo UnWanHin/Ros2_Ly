@@ -250,10 +250,14 @@ namespace BehaviorTree {
 
         // int now_time = 420 - timeLeft;
         int now_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - gameStartTime).count();
-        static constexpr auto delta_yaw = 1.0f;
+        static constexpr auto delta_yaw = 1.0f; //bt每tick單位
         static constexpr auto buff_yaw = -50.0f + 360.0f;
-        static constexpr auto kPatrolScanYawStep = 9.0f * delta_yaw;
-        static constexpr auto kPatrolScanYawBoostStep = 10.0f * delta_yaw;
+        static constexpr auto kPatrolScanYawStep = 9.0f * delta_yaw; //單向巡航每tick度數
+        static constexpr auto kPatrolScanYawBoostStep = 10.0f * delta_yaw; //受擊加速
+        static constexpr auto kPatrolSwingYawStep = 9.0f * delta_yaw; //雙向巡航每tick度數
+        static constexpr auto kPatrolSwingYawBoostStep = 10.0f * delta_yaw; //受擊加速
+        static constexpr auto kPatrolSwingHalfRangeDeg = 90.0f; // mode2: 左右擺頭 ±90
+        static constexpr auto kPatrolSwingCenterDriftYawStep = 1.5f * delta_yaw; // mode2: 中心點恆速向右
         static constexpr int kDamageScanBoostWindowMs = 1300;
         static constexpr int kDamageScanYawPhaseMs = 160;
 
@@ -421,9 +425,7 @@ namespace BehaviorTree {
                     int yaw_scan_direction = 1;
 
                     if (patrol_mode == 2) {
-                        const float mode2_base_step = config.PatrolScanSettings.YawStepPerTick;
-                        const float mode2_boost_extra = kPatrolScanYawBoostStep - kPatrolScanYawStep;
-                        yaw_scan_step = boost_patrol_scan ? (mode2_base_step + mode2_boost_extra) : mode2_base_step;
+                        yaw_scan_step = boost_patrol_scan ? kPatrolSwingYawBoostStep : kPatrolSwingYawStep;
 
                         if (!patrolScanCenterInitialized_ || patrolScanActiveMode_ != patrol_mode) {
                             patrolScanCenterInitialized_ = true;
@@ -433,7 +435,10 @@ namespace BehaviorTree {
                             patrolScanDirection_ = 1; // 新一轮巡逻默认先向右
                         }
 
-                        const float half_range = config.PatrolScanSettings.HalfRangeDeg;
+                        // mode2: 擺頭中心點以固定速度持續向右漂移。
+                        patrolScanCenterYaw_ += kPatrolSwingCenterDriftYawStep;
+
+                        const float half_range = kPatrolSwingHalfRangeDeg;
                         patrolScanOffsetYaw_ += static_cast<float>(patrolScanDirection_) * yaw_scan_step;
                         if (patrolScanOffsetYaw_ >= half_range) {
                             patrolScanOffsetYaw_ = half_range;

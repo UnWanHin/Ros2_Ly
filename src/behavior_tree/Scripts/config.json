@@ -8,9 +8,7 @@
         "HitCar": false
     },
     "PatrolScan": {
-        "Mode": 1,
-        "HalfRangeDeg": 180.0,
-        "YawStepPerTick": 9.0
+        "Mode": 1
     },
     "Rate" : {
         "FireRate" : 20,
