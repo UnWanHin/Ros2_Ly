@@ -20,7 +20,7 @@
 #include <rclcpp/executors.hpp>
 
 #include "gimbal_driver/msg/gimbal_angles.hpp"
-#include "gimbal_driver/msg/d_vel.hpp"
+#include "gimbal_driver/msg/chassis.hpp"
 #include "gimbal_driver/msg/uwb_pos.hpp"
 #include "gimbal_driver/msg/vel.hpp"
 #include "gimbal_driver/msg/health.hpp"
@@ -51,7 +51,7 @@ namespace
     LY_DEF_ROS_TOPIC(ly_gimbal_angles, "/ly/gimbal/angles", gimbal_driver::msg::GimbalAngles);
     LY_DEF_ROS_TOPIC(ly_gimbal_firecode, "/ly/gimbal/firecode", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_gimbal_vel, "/ly/gimbal/vel", gimbal_driver::msg::Vel);
-    LY_DEF_ROS_TOPIC(ly_gimbal_d_vel, "/ly/gimbal/d_vel", gimbal_driver::msg::DVel);
+    LY_DEF_ROS_TOPIC(ly_gimbal_chassis, "/ly/gimbal/chassis", gimbal_driver::msg::Chassis);
     LY_DEF_ROS_TOPIC(ly_gimbal_posture, "/ly/gimbal/posture", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_gimbal_capV, "/ly/gimbal/capV", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_game_eventdata, "ly/gimbal/eventdata", std_msgs::msg::UInt32);
@@ -109,10 +109,25 @@ namespace
             return posture >= 1 && posture <= 3;
         }
 
-        static std::uint8_t DecodePostureFromReserve16(std::uint16_t reserve16) noexcept {
-            // 姿态回读统一约定：Reserve_16 高 8 位。
-            const auto high8 = static_cast<std::uint8_t>((reserve16 >> 8) & 0xFFu);
+        static std::uint8_t DecodePostureFromU16(std::uint16_t posture_raw) noexcept {
+            // 兼容两种编码：
+            // 1) 老约定：高8位是姿态值
+            // 2) 新约定：低8位直接是姿态值
+            const auto low8 = static_cast<std::uint8_t>(posture_raw & 0xFFu);
+            if (IsValidPosture(low8)) {
+                return low8;
+            }
+            const auto high8 = static_cast<std::uint8_t>((posture_raw >> 8) & 0xFFu);
             return IsValidPosture(high8) ? high8 : 0u;
+        }
+
+        static float DecodeU8IntU8Dec(std::uint16_t raw) noexcept {
+            const auto int_part = static_cast<std::int8_t>((raw >> 8) & 0xFFu);
+            const auto dec_part = static_cast<std::uint8_t>(raw & 0xFFu);
+            const auto dec = static_cast<float>(dec_part) / 100.0f;
+            return int_part >= 0
+                ? static_cast<float>(int_part) + dec
+                : static_cast<float>(int_part) - dec;
         }
 
         void ArmPostureTx(std::uint8_t posture) {
@@ -451,7 +466,15 @@ namespace
             }
         }
 
-        void PubExtendData(const ExtendData& data, std::int16_t d_vel_x_raw, std::int16_t d_vel_y_raw) {
+        void PubChassisData(const ChassisData& data) {
+            const auto packed1_u32 = static_cast<std::uint32_t>(data.ChassisPacked1);
+            const auto packed2_u32 = static_cast<std::uint32_t>(data.ChassisPacked2);
+
+            const auto steer_angle_u16 = static_cast<std::uint16_t>(packed1_u32 & 0xFFFFu);
+            const auto angular_vel_u16 = static_cast<std::uint16_t>((packed1_u32 >> 16) & 0xFFFFu);
+            const auto vel_x_u16 = static_cast<std::uint16_t>(packed2_u32 & 0xFFFFu);
+            const auto vel_y_u16 = static_cast<std::uint16_t>((packed2_u32 >> 16) & 0xFFFFu);
+
             {
                 using topic = ly_me_uwb_yaw;
                 topic::Msg msg;
@@ -459,14 +482,16 @@ namespace
                 Node.Publisher<topic>()->publish(msg);
             }
             {
-                using topic = ly_gimbal_d_vel;
+                using topic = ly_gimbal_chassis;
                 topic::Msg msg;
-                msg.x = d_vel_x_raw;
-                msg.y = d_vel_y_raw;
+                msg.steer_angle = DecodeU8IntU8Dec(steer_angle_u16);
+                msg.angular_velocity = DecodeU8IntU8Dec(angular_vel_u16);
+                msg.velocity_x = DecodeU8IntU8Dec(vel_x_u16);
+                msg.velocity_y = DecodeU8IntU8Dec(vel_y_u16);
                 Node.Publisher<topic>()->publish(msg);
             }
 
-            const auto posture_raw = DecodePostureFromReserve16(data.Reserve_16);
+            const auto posture_raw = DecodePostureFromU16(data.Posture);
             if (IsValidPosture(posture_raw)) {
                 postureState_ = posture_raw;
                 PublishPosture(postureState_);
@@ -505,18 +530,15 @@ namespace
                     case PositionData::TypeID:
                         PubPositionData(m.GetDataAs<PositionData>());
                         break;
+                    case ChassisData::TypeID:
+                    {
+                        const auto& chassis_data = m.GetDataAs<ChassisData>();
+                        PubChassisData(chassis_data);
+                        break;
+                    }
                     case ExtendData::TypeID:
                     {
-                        const auto& extend_data = m.GetDataAs<ExtendData>();
-                        const auto reserve_32_1_u32 = static_cast<std::uint32_t>(extend_data.Reserve_32_1);
-                        const auto reserve_32_1_high16_u =
-                            static_cast<std::uint16_t>((reserve_32_1_u32 >> 16) & 0xFFFFu);
-
-                        const auto reserve_32_2_u32 = static_cast<std::uint32_t>(extend_data.Reserve_32_2);
-                        const auto reserve_32_2_low16_u = static_cast<std::uint16_t>(reserve_32_2_u32 & 0xFFFFu);
-                        const auto d_vel_y_raw = static_cast<std::int16_t>(reserve_32_1_high16_u);
-                        const auto d_vel_x_raw = static_cast<std::int16_t>(reserve_32_2_low16_u);
-                        PubExtendData(extend_data, d_vel_x_raw, d_vel_y_raw);
+                        // TypeID=7 预留扩展帧，当前上位机暂不解析。
                         break;
                     }
 

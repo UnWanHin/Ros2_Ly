@@ -203,13 +203,24 @@ namespace LangYa
         uint16_t BulletSpeed; // 弹速，100倍
     };
 
-    struct ExtendData {
+    /// TypeID=6: 底盘状态回传（固定12B）
+    struct ChassisData {
         static constexpr auto TypeID = 6;
-        std::uint16_t UWBAngleYaw; // 2 字节
-        std::uint16_t Reserve_16; // 高8位放posture
-        std::uint32_t Reserve_32_1; // 高16位: yaw angle(int16,0.01deg) //要改成高16位
-        std::uint32_t Reserve_32_2; // 低16位: yaw vel 累加換算
+        std::uint16_t UWBAngleYaw; // 2B
+        std::uint16_t Posture;     // 2B
+        // low16: 舵角当前角(8位整数+8位小数), high16: 底盘角速度(8位整数+8位小数)
+        std::uint32_t ChassisPacked1;
+        // low16: 底盘x方向速度(8位整数+8位小数), high16: 底盘y方向速度(8位整数+8位小数)
+        std::uint32_t ChassisPacked2;
     };
+    static_assert(sizeof(ChassisData) == sizeof(GimbalData), "TypeID=6 payload must stay 12B");
+
+    /// TypeID=7: 预留扩展数据（固定12B）
+    struct ExtendData {
+        static constexpr auto TypeID = 7;
+        std::array<std::uint8_t, sizeof(GimbalData)> Raw{};
+    };
+    static_assert(sizeof(ExtendData) == sizeof(GimbalData), "TypeID=7 payload must stay 12B");
 
 
 #pragma pack(pop)

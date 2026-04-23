@@ -140,7 +140,8 @@ TypedMessage<sizeof(GimbalData)>
 | `3` | `HealthEnemyData` | `PubHealthEnemyData()` |
 | `4` | `RFIDAndBuffData` | `PubRFIDAndBuffData()` |
 | `5` | `PositionData` | `PubPositionData()` |
-| `6` | `ExtendData` | `PubExtendData()` |
+| `6` | `ChassisData` | `PubChassisData()` |
+| `7` | `ExtendData` | 当前仅识别，暂不解析发布 |
 
 ---
 
@@ -435,16 +436,16 @@ data.Friend.CarId == 7
 
 ---
 
-## 5.7 `TypeID=6` - `ExtendData`
+## 5.7 `TypeID=6` - `ChassisData`
 
 结构：
 
 ```cpp
-struct ExtendData {
+struct ChassisData {
     std::uint16_t UWBAngleYaw;
-    std::uint16_t Reserve_16;
-    std::uint32_t Reserve_32_1;
-    std::uint32_t Reserve_32_2;
+    std::uint16_t Posture;
+    std::uint32_t ChassisPacked1;
+    std::uint32_t ChassisPacked2;
 };
 ```
 
@@ -453,12 +454,11 @@ struct ExtendData {
 | 串口字段 | 解析方式 | 发布 topic | 备注 |
 |---|---|---|---|
 | `UWBAngleYaw` | 直接读 `uint16` | `/ly/me/uwb_yaw` | 自身朝向角 |
-| `Reserve_16` bit8~15（高8位） | 按 `uint8` 姿态值解析 | `/ly/gimbal/posture` | 仅 `1/2/3` 才发布 |
-| `Reserve_16` bit0~7（低8位） | 当前未解析 | 无 | 预留 |
-| `Reserve_32_1` low16（byte0~1） | 当前未解析 | 无 | 预留 |
-| `Reserve_32_1` high16（byte2~3） | 按 `int16` 原始值解析 | `/ly/gimbal/d_vel` | 写入 `msg.y` |
-| `Reserve_32_2` low16（byte0~1） | 按 `int16` 原始值解析 | `/ly/gimbal/d_vel` | 写入 `msg.x` |
-| `Reserve_32_2` high16（byte2~3） | 当前未解析 | 无 | 预留 |
+| `Posture` | 先读低8位，低8位无效时回退高8位；按 `uint8` 姿态值解析 | `/ly/gimbal/posture` | 仅 `1/2/3` 才发布 |
+| `ChassisPacked1` low16（byte0~1） | 8位整数+8位小数（2位小数） | `/ly/gimbal/chassis` | `steer_angle` |
+| `ChassisPacked1` high16（byte2~3） | 8位整数+8位小数（2位小数） | `/ly/gimbal/chassis` | `angular_velocity` |
+| `ChassisPacked2` low16（byte0~1） | 8位整数+8位小数（2位小数） | `/ly/gimbal/chassis` | `velocity_x` |
+| `ChassisPacked2` high16（byte2~3） | 8位整数+8位小数（2位小数） | `/ly/gimbal/chassis` | `velocity_y` |
 
 ### 5.7.2 姿态回读规则
 
@@ -476,6 +476,12 @@ struct ExtendData {
 - 文档语义上 `0` 表示未知
 - 代码里只有 `1/2/3` 会发布 `/ly/gimbal/posture`
 - 如果下位机发 `0`，当前上位机不会主动发布一个新的 `0`
+
+---
+
+## 5.8 `TypeID=7` - `ExtendData`
+
+当前作为 12B 预留扩展帧接入，`gimbal_driver` 已识别 `TypeID=7`，但暂不拆字段发布。
 
 ---
 
@@ -519,10 +525,10 @@ struct ExtendData {
 | `5` | 位置数据 | `PositionData.Friend/Enemy` | `/ly/position/data` |
 | `5` | 自身 UWB 坐标 | `PositionData.Friend.X/Y` | `/ly/me/uwb_pos` |
 | `5` | 弹速 | `PositionData.BulletSpeed` | `/ly/bullet/speed` |
-| `6` | 自身朝向 | `ExtendData.UWBAngleYaw` | `/ly/me/uwb_yaw` |
-| `6` | 扩展回读 `d_vel.x` | `ExtendData.Reserve_32_2` low16（`int16` 原始值） | `/ly/gimbal/d_vel` |
-| `6` | 扩展回读 `d_vel.y` | `ExtendData.Reserve_32_1` high16（`int16` 原始值） | `/ly/gimbal/d_vel` |
-| `6` | 姿态回读 | `ExtendData.Reserve_16` 高 8 位 | `/ly/gimbal/posture` |
+| `6` | 自身朝向 | `ChassisData.UWBAngleYaw` | `/ly/me/uwb_yaw` |
+| `6` | 底盘回读（四元） | `ChassisPacked1/2`（8位整数+8位小数） | `/ly/gimbal/chassis` |
+| `6` | 姿态回读 | `ChassisData.Posture`（先低8位，后高8位） | `/ly/gimbal/posture` |
+| `7` | 预留扩展帧 | `ExtendData.Raw[12]` | 当前未发布 |
 
 ---
 
@@ -533,8 +539,7 @@ struct ExtendData {
 | 结构 | 字段 | 当前状态 |
 |---|---|---|
 | `RFIDAndBuffData.BuffStatus` | `reserve` | 未发布 |
-| `ExtendData` | `Reserve_16` 剩余位（除 posture 编码） | 未解析 |
-| `ExtendData` | `Reserve_32_1` low16、`Reserve_32_2` high16 | 未解析 |
+| `ExtendData` | `Raw[12]` | 未解析（TypeID=7 预留） |
 | `ExtEventDataType` | 各 bit 子字段 | 仅整体透传，未单独拆 topic |
 
 ---
@@ -550,4 +555,4 @@ struct ExtendData {
 - `TypeID=3`：`PubHealthEnemyData()`
 - `TypeID=4`：`PubRFIDAndBuffData()`
 - `TypeID=5`：`PubPositionData()`
-- `TypeID=6`：`PubExtendData()`
+- `TypeID=6`：`PubChassisData()`

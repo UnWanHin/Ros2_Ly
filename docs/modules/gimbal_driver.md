@@ -27,7 +27,7 @@ gimbal_driver/
 │   ├── BuffData.msg            # 能量機關增益狀態
 │   ├── PositionData.msg        # 機器人位置（UWB）
 │   ├── UWBPos.msg              # UWB位置
-│   ├── DVel.msg                # TypeID=6 扩展回传原始值
+│   ├── Chassis.msg             # TypeID=6 底盘状态四元
 │   └── Vel.msg                 # 速度指令
 └── module/
     ├── BasicTypes.hpp          # 底層數據結構定義
@@ -81,7 +81,7 @@ main()
 #### 「讀取」路徑：`LoopRead()` → `Pub*()`
 
 從串口讀到 `TypedMessage`，根據 `TypeID` 分發到不同的 `Pub*` 函數。
-當前上行是分型幀模式，實際使用 `TypeID=0..6`：
+當前上行是分型幀模式，實際使用 `TypeID=0..7`：
 
 | TypeID 對應數據結構 | 調用函數 | 發布的 Topic |
 |---|---|---|
@@ -91,7 +91,8 @@ main()
 | `HealthEnemyData` | `PubHealthEnemyData()` | `/ly/enemy/hp`, `/ly/enemy/base_hp` |
 | `RFIDAndBuffData` | `PubRFIDAndBuffData()` | `/ly/me/rfid`, `/ly/team/buff` |
 | `PositionData` | `PubPositionData()` | `/ly/position/data`, `/ly/me/uwb_pos`, `/ly/bullet/speed` |
-| `ExtendData` | `PubExtendData()` | `/ly/me/uwb_yaw`, `/ly/gimbal/d_vel`（`x=Reserve_32_2 low16`, `y=Reserve_32_1 high16`，均为原始 `int16`）, `/ly/gimbal/posture`（`Reserve_16` 高 8 位） |
+| `ChassisData` (`TypeID=6`) | `PubChassisData()` | `/ly/me/uwb_yaw`, `/ly/gimbal/chassis`（四元浮點）, `/ly/gimbal/posture` |
+| `ExtendData` (`TypeID=7`) | （预留，暂不解析） | 当前无发布 |
 
 #### 「寫入」路徑：`GenSubs()` → `Device.Write()`
 
@@ -124,7 +125,8 @@ main()
 | `HealthMyselfData` / `HealthEnemyData` | 我方/敵方各機器人血量 |
 | `RFIDAndBuffData` | `0x0209 rfid_status` 低 32 位 + `0x0204` 增益數據（防禦、攻擊、回血等） |
 | `PositionData` | UWB定位數據（友/敵機器人X、Y座標）+ 子彈速度 |
-| `ExtendData` | UWB yaw 角（自身朝向）+ `Reserve_32_1` 高 16 位与 `Reserve_32_2` 低 16 位组成 `d_vel` 原始值（`int16`）+ `Reserve_16` 姿態回讀（高 8 位） |
+| `ChassisData` | UWB yaw + 姿态回读 + 底盘四元（舵角/角速度/x速/y速，8位整数+8位小数） |
+| `ExtendData` | `TypeID=7` 预留 12B 扩展帧 |
 | `FireCodeType` | 位域：`FireStatus`（開火狀態）、`Rotate`（旋轉速度0-3）、`AimMode`（瞄準模式） |
 
 ---
@@ -148,7 +150,7 @@ IODevice<TypedMessage<sizeof(GimbalData)>, GimbalControlData>
 ```
 
 含義：
-- 上行：讀 `TypedMessage`，依 `TypeID` 分發 `0..6`
+- 上行：讀 `TypedMessage`，依 `TypeID` 分發 `0..7`
 - 下行：直接寫 `GimbalControlData`，姿態已并入 `Posture` 字段，沒有獨立 `TypeID=7`
 
 **虛擬設備模式**（`useVirtualDevice=true`）：用於在沒有硬件時做本地迴環測試，通過 `TestVirtualLoopback()` 驗證數據收發。
@@ -231,8 +233,8 @@ IODevice<TypedMessage<sizeof(GimbalData)>, GimbalControlData>
 | `/ly/team/buff` | `BuffData` | 能量機關增益狀態 |
 | `/ly/position/data` | `PositionData` | UWB位置數據 |
 | `/ly/me/uwb_pos` | `UInt16MultiArray` | 自身UWB位置[x, y] |
-| `/ly/gimbal/d_vel` | `DVel` | 扩展回读原始值（`x=Reserve_32_2 low16`, `y=Reserve_32_1 high16`） |
-| `/ly/gimbal/posture` | `UInt8` | 姿態回讀（來源 `ExtendData.Reserve_16` 高 8 位；僅 1/2/3 視為有效） |
+| `/ly/gimbal/chassis` | `Chassis` | 底盘四元反馈（`steer_angle`, `angular_velocity`, `velocity_x`, `velocity_y`） |
+| `/ly/gimbal/posture` | `UInt8` | 姿態回讀（來源 `ChassisData.Posture`，先低 8 位再回退高 8 位；僅 1/2/3 視為有效） |
 | `ly/gimbal/eventdata` | `UInt32` | 場地事件原始值（當前 topic 字符串無前導 `/`） |
 
 ### 訂閱的 Topics
