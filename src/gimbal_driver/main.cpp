@@ -293,13 +293,6 @@ namespace
                 Node.Publisher<topic>()->publish(msg);
             }
             {
-                using topic = ly_gimbal_vel;
-                topic::Msg msg;
-                msg.x = static_cast<int8_t>(data.Velocity.X);
-                msg.y = static_cast<int8_t>(data.Velocity.Y);
-                Node.Publisher<topic>()->publish(msg);
-            }
-            {
                 using topic = ly_gimbal_capV;
                 topic::Msg msg;
                 msg.data = static_cast<std::uint8_t>(data.CapV);
@@ -475,6 +468,12 @@ namespace
             const auto angular_vel_u16 = static_cast<std::uint16_t>((packed1_u32 >> 16) & 0xFFFFu);
             const auto vel_x_u16 = static_cast<std::uint16_t>(packed2_u32 & 0xFFFFu);
             const auto vel_y_u16 = static_cast<std::uint16_t>((packed2_u32 >> 16) & 0xFFFFu);
+            const auto now = Node.GetNode()->now();
+
+            const auto steer_angle = DecodeI16WithScale(steer_angle_u16, 10.0f);
+            const auto angular_velocity = DecodeI16WithScale(angular_vel_u16, 100.0f);
+            const auto velocity_x = DecodeI16WithScale(vel_x_u16, 100.0f);
+            const auto velocity_y = DecodeI16WithScale(vel_y_u16, 100.0f);
 
             {
                 using topic = ly_me_uwb_yaw;
@@ -485,11 +484,19 @@ namespace
             {
                 using topic = ly_gimbal_chassis;
                 topic::Msg msg;
-                msg.header.stamp = Node.GetNode()->now();
-                msg.steer_angle = DecodeI16WithScale(steer_angle_u16, 10.0f);
-                msg.angular_velocity = DecodeI16WithScale(angular_vel_u16, 100.0f);
-                msg.velocity_x = DecodeI16WithScale(vel_x_u16, 100.0f);
-                msg.velocity_y = DecodeI16WithScale(vel_y_u16, 100.0f);
+                msg.header.stamp = now;
+                msg.steer_angle = steer_angle;
+                msg.angular_velocity = angular_velocity;
+                msg.velocity_x = velocity_x;
+                msg.velocity_y = velocity_y;
+                Node.Publisher<topic>()->publish(msg);
+            }
+            {
+                using topic = ly_gimbal_vel;
+                topic::Msg msg;
+                msg.header.stamp = now;
+                msg.x = velocity_x;
+                msg.y = velocity_y;
                 Node.Publisher<topic>()->publish(msg);
             }
 

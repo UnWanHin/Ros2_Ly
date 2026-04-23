@@ -2,5 +2,6 @@
 # This file belongs to the ROS2 sentry workspace codebase.
 # Keep behavior and interface changes synchronized with related modules.
 
-int8 x
-int8 y
+std_msgs/Header header
+float32 x
+float32 y
