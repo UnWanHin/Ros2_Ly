@@ -53,6 +53,7 @@ namespace
     LY_DEF_ROS_TOPIC(ly_gimbal_firecode, "/ly/gimbal/firecode", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_gimbal_vel, "/ly/gimbal/vel", gimbal_driver::msg::Vel);
     LY_DEF_ROS_TOPIC(ly_gimbal_chassis, "/ly/gimbal/chassis", gimbal_driver::msg::Chassis);
+    LY_DEF_ROS_TOPIC(ly_gimbal_big_yaw_angles, "/ly/gimbal/big_yaw_angles", std_msgs::msg::Float32);
     LY_DEF_ROS_TOPIC(ly_gimbal_posture, "/ly/gimbal/posture", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_gimbal_capV, "/ly/gimbal/capV", std_msgs::msg::UInt8);
     LY_DEF_ROS_TOPIC(ly_game_eventdata, "ly/gimbal/eventdata", std_msgs::msg::UInt32);
@@ -492,6 +493,12 @@ namespace
                 Node.Publisher<topic>()->publish(msg);
             }
             {
+                using topic = ly_gimbal_big_yaw_angles;
+                topic::Msg msg;
+                msg.data = steer_angle;
+                Node.Publisher<topic>()->publish(msg);
+            }
+            {
                 using topic = ly_gimbal_vel;
                 topic::Msg msg;
                 msg.header.stamp = now;
@@ -590,6 +597,7 @@ namespace
         void Run(int argc, char** argv)
         {
             Node.Initialize(argc, argv);
+            Node.Publisher<ly_gimbal_big_yaw_angles>();
             GenSubs();
             auto node = Node.GetNode();
             rclcpp::Rate rate(250);
