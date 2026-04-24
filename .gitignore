@@ -10,3 +10,7 @@ src/ly-ros.zip
 bfg-*.jar
 ..bfg-report/
 tools/maps/src/RMUC2026_V1.2.0.step
+.codex/
+codex-local-skills/
+local-skills/
+skills/
