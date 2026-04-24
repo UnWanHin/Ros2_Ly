@@ -209,7 +209,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Interactive map pointer launcher")
     parser.add_argument("--step-file", default="", help="Direct STEP file path (skip step selection)")
     parser.add_argument("--map-name", default="", help="Map name to create/use")
-    parser.add_argument("--image-file", default="", help="Optional existing basemap PNG for marker page")
+    parser.add_argument(
+        "--image-file",
+        default="basemaps/RMUC2026_V1.2.0_topview_cad_field.png",
+        help="Existing basemap PNG for marker page (relative to tools/maps by default)",
+    )
     parser.add_argument("--new-map", action="store_true", help="Force create new map plugin")
     parser.add_argument("--existing-map", action="store_true", help="Force use existing map plugin")
     parser.add_argument("--force", action="store_true", help="Allow overwrite when creating new map plugin")
@@ -268,7 +272,10 @@ def main() -> None:
     assert plugin_path is not None
     image_path: Path | None = None
     if args.image_file:
-        image_candidate = Path(args.image_file).expanduser().resolve()
+        image_candidate = Path(args.image_file).expanduser()
+        if not image_candidate.is_absolute():
+            image_candidate = base_dir / image_candidate
+        image_candidate = image_candidate.resolve()
         if not image_candidate.exists():
             raise SystemExit(f"image file not found: {image_candidate}")
         image_path = image_candidate

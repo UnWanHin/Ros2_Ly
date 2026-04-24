@@ -22,6 +22,7 @@
     .small { color: #666; font-size: 12px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     textarea { width: 100%; height: 180px; }
+    .compact-textarea { height: 120px; }
   </style>
 </head>
 <body>
@@ -31,6 +32,7 @@
         <label>底圖：
           <input type="file" id="imageInput" accept="image/*" />
         </label>
+        <button id="loadDefaultImageBtn" type="button">載入預設底圖</button>
         <label>地圖寬(cm)：
           <input type="number" id="mapWidth" value="2800" min="1" />
         </label>
@@ -81,8 +83,10 @@
       <div class="small">
         坐標系固定：左下角為 (0,0)，X 向右，Y 向上；點圖時會自動換算 cm。
       </div>
+      <div class="small">C++ 匯入支援 <span class="mono">Location&lt;...&gt; Name{{red},{blue}}</span> 點位，以及 <span class="mono">std::vector&lt;Point&lt;...&gt;&gt; NameRedPoints = {{...}}</span> 區塊線。</div>
       <div class="small">自定義點：輸入 X/Y 會即時預覽；X 或 Y 完成編輯(change)後會新增一個點，舊點不清除。地圖區右鍵也可直接新增自定義點。</div>
       <div class="small" id="pointStats">已標記 0/38，完整點位 0/19</div>
+      <div class="small" id="regionStats">區塊 0</div>
       <div class="small" id="customStats">自定義點 0</div>
       <div class="small" id="statusText">狀態：待操作</div>
     </div>
@@ -119,6 +123,22 @@
 
     <div class="card">
       <div class="row">
+        <button id="loadDefaultAreaBtn" type="button">載入預設 Area.hpp</button>
+        <label>從 C++ 檔載入：
+          <input type="file" id="cppFileInput" accept=".hpp,.h,.cpp,.cc,.cxx,.txt,text/plain" />
+        </label>
+        <button id="importCppBtn" type="button">從 C++ 一鍵匯入點/區塊</button>
+        <button id="clearCppRegionsBtn" type="button">清空 C++ 區塊線</button>
+      </div>
+      <textarea id="cppText" class="mono compact-textarea" placeholder="貼上 Area.hpp 片段，例如：
+static const Location&lt;std::uint16_t&gt; Home{ {393, 810}, {2408, 683} };
+static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
+  { 583, 749 }, { 624, 823 }, { 707, 823 }
+};"></textarea>
+    </div>
+
+    <div class="card">
+      <div class="row">
         <label>從 JSON 檔載入：
           <input type="file" id="pluginFileInput" accept=".json,application/json" />
         </label>
@@ -135,10 +155,13 @@
       [10, "OutpostArea"], [11, "MidShoot"], [12, "LeftShoot"], [13, "OutpostShoot"], [14, "BuffAround1"],
       [15, "BuffAround2"], [16, "RightShoot"], [17, "HoleRoad"], [18, "OccupyArea"]
     ];
+    const DEFAULT_IMAGE_URI = "../basemaps/RMUC2026_V1.2.0_topview_cad_field.png";
+    const DEFAULT_AREA_URI = "../../../src/behavior_tree/module/Area.hpp";
 
     const state = {
       points: DEFAULT_POINTS.map(([id, name]) => ({ id, name, red: null, blue: null })),
       history: [],
+      regions: [],
       customPoints: [],
       nextCustomId: 1,
       customPreview: null,
@@ -147,6 +170,7 @@
     };
 
     const imageInput = document.getElementById("imageInput");
+    const cppFileInput = document.getElementById("cppFileInput");
     const mapImage = document.getElementById("mapImage");
     const overlay = document.getElementById("overlay");
     const ctx = overlay.getContext("2d");
@@ -163,7 +187,9 @@
     const showTagToggle = document.getElementById("showTagToggle");
     const pointStats = document.getElementById("pointStats");
     const customStats = document.getElementById("customStats");
+    const regionStats = document.getElementById("regionStats");
     const statusText = document.getElementById("statusText");
+    const cppText = document.getElementById("cppText");
     const customLabel = document.getElementById("customLabel");
     const customX = document.getElementById("customX");
     const customY = document.getElementById("customY");
@@ -290,6 +316,106 @@
       addCustomPointFromInput();
     }
 
+    function teamFromName(name) {
+      const lowered = name.toLowerCase();
+      if (lowered.includes("blue")) return "blue";
+      return "red";
+    }
+
+    function stripTeamSuffix(name) {
+      return name.replace(/(?:Red|Blue)?Points$/i, "").replace(/(?:Red|Blue)$/i, "") || name;
+    }
+
+    function parsePointPairs(body) {
+      const result = [];
+      const pairRegex = /\{\s*(\d+)\s*,\s*(\d+)\s*\}/g;
+      let match;
+      while ((match = pairRegex.exec(body)) !== null) {
+        result.push([Number(match[1]), Number(match[2])]);
+      }
+      return result;
+    }
+
+    function importCppLocations(text) {
+      let imported = 0;
+      const locationRegex = /(?:static\s+const\s+)?(?:auto|Location\s*<[^>]+>)\s+(\w+)\s*\{\s*\{\s*(\d+)\s*,\s*(\d+)\s*\}\s*,\s*\{\s*(\d+)\s*,\s*(\d+)\s*\}\s*\}\s*;?/g;
+      let match;
+      while ((match = locationRegex.exec(text)) !== null) {
+        const name = match[1];
+        const point = state.points.find(item => item.name === name);
+        if (!point) continue;
+        const red = [Number(match[2]), Number(match[3])];
+        const blue = [Number(match[4]), Number(match[5])];
+        state.history.push({ kind: "preset", id: point.id, team: "red", prev: point.red ? [...point.red] : null });
+        state.history.push({ kind: "preset", id: point.id, team: "blue", prev: point.blue ? [...point.blue] : null });
+        point.red = red;
+        point.blue = blue;
+        imported += 1;
+      }
+      return imported;
+    }
+
+    function importCppRegions(text) {
+      let imported = 0;
+      const regionRegex = /(?:static\s+const\s+)?(?:std::)?vector\s*<\s*Point\s*<[^>]+>\s*>\s+(\w+)\s*=\s*\{([\s\S]*?)\}\s*;/g;
+      let match;
+      while ((match = regionRegex.exec(text)) !== null) {
+        const points = parsePointPairs(match[2]);
+        if (points.length < 2) continue;
+        const name = match[1];
+        state.regions.push({
+          name: stripTeamSuffix(name),
+          team: teamFromName(name),
+          points
+        });
+        imported += 1;
+      }
+      return imported;
+    }
+
+    function importCppText() {
+      const text = cppText.value;
+      if (!text.trim()) {
+        setStatus("C++ 文字框是空的");
+        return;
+      }
+      const locationCount = importCppLocations(text);
+      state.regions = [];
+      const regionCount = importCppRegions(text);
+      drawAll();
+      setStatus(`C++ 匯入完成：點位 ${locationCount}，區塊 ${regionCount}`);
+    }
+
+    function clearCppRegions() {
+      state.regions = [];
+      drawAll();
+      setStatus("已清空 C++ 區塊線");
+    }
+
+    async function loadTextFromUri(uri) {
+      const response = await fetch(uri);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.text();
+    }
+
+    async function loadDefaultArea() {
+      try {
+        const text = await loadTextFromUri(DEFAULT_AREA_URI);
+        cppText.value = text;
+        importCppText();
+        setStatus("已載入預設 Area.hpp 並匯入點/區塊");
+        return true;
+      } catch (error) {
+        setStatus("預設 Area.hpp 載入失敗；若瀏覽器限制 file://，請用檔案選擇載入");
+        return false;
+      }
+    }
+
+    function loadDefaultImage() {
+      mapImage.src = DEFAULT_IMAGE_URI;
+      setStatus("已載入預設底圖");
+    }
+
     function drawTag(x, y, text, color) {
       const fontSize = 12;
       const padX = 4;
@@ -372,8 +498,48 @@
       }
     }
 
+    function drawRegion(region) {
+      if (!Array.isArray(region.points) || region.points.length < 2) return;
+      const style = TEAM_STYLE[normalizeTeam(region.team)];
+      ctx.save();
+      ctx.strokeStyle = style.color;
+      ctx.fillStyle = style.color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
+      ctx.beginPath();
+      region.points.forEach((point, index) => {
+        const [x, y] = toScreen(point[0], point[1]);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+      ctx.globalAlpha = 0.12;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+      for (const point of region.points) {
+        const [x, y] = toScreen(point[0], point[1]);
+        ctx.beginPath();
+        ctx.rect(x - 3, y - 3, 6, 6);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      const [labelX, labelY] = toScreen(region.points[0][0], region.points[0][1]);
+      if (showTagToggle.checked) {
+        drawTag(labelX, labelY, `${style.prefix}:${region.name}`, style.color);
+      }
+      ctx.restore();
+    }
+
     function renderCustomStats() {
       customStats.textContent = `自定義點 ${state.customPoints.length}`;
+    }
+
+    function renderRegionStats() {
+      regionStats.textContent = `區塊 ${state.regions.length}`;
     }
 
     function renderCustomTable() {
@@ -393,6 +559,9 @@
 
     function drawAll() {
       ctx.clearRect(0, 0, overlay.width, overlay.height);
+      for (const region of state.regions) {
+        drawRegion(region);
+      }
       for (const p of state.points) {
         drawPoint(p, "red");
         drawPoint(p, "blue");
@@ -402,6 +571,7 @@
       }
       drawCustomPreview();
       renderTable();
+      renderRegionStats();
       renderCustomStats();
       renderCustomTable();
     }
@@ -463,6 +633,44 @@
       }
 
       return best;
+    }
+
+    function distanceToSegmentSquared(px, py, ax, ay, bx, by) {
+      const vx = bx - ax;
+      const vy = by - ay;
+      const wx = px - ax;
+      const wy = py - ay;
+      const lengthSq = vx * vx + vy * vy;
+      if (lengthSq === 0) {
+        const dx = px - ax;
+        const dy = py - ay;
+        return dx * dx + dy * dy;
+      }
+      const t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / lengthSq));
+      const cx = ax + t * vx;
+      const cy = ay + t * vy;
+      const dx = px - cx;
+      const dy = py - cy;
+      return dx * dx + dy * dy;
+    }
+
+    function findNearestRegionOnScreen(screenX, screenY, radiusPx = 8) {
+      let best = null;
+      const radiusSq = radiusPx * radiusPx;
+      for (const region of state.regions) {
+        if (!Array.isArray(region.points) || region.points.length < 2) continue;
+        for (let index = 0; index < region.points.length; index += 1) {
+          const current = region.points[index];
+          const next = region.points[(index + 1) % region.points.length];
+          const [ax, ay] = toScreen(current[0], current[1]);
+          const [bx, by] = toScreen(next[0], next[1]);
+          const distSq = distanceToSegmentSquared(screenX, screenY, ax, ay, bx, by);
+          if (distSq <= radiusSq && (!best || distSq < best.distSq)) {
+            best = { region, distSq };
+          }
+        }
+      }
+      return best ? best.region : null;
     }
 
     function erasePointAt(screenX, screenY) {
@@ -618,6 +826,18 @@
       reader.readAsDataURL(file);
     });
 
+    cppFileInput.addEventListener("change", event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        cppText.value = String(e.target?.result || "");
+        importCppText();
+        setStatus(`已從檔案載入 C++：${file.name}`);
+      };
+      reader.readAsText(file, "utf-8");
+    });
+
     mapImage.addEventListener("load", resizeOverlay);
     window.addEventListener("resize", resizeOverlay);
 
@@ -626,10 +846,13 @@
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
       const [cmX, cmY] = toCm(x, y);
+      const region = findNearestRegionOnScreen(x, y);
       hoverText.style.display = "block";
       hoverText.style.left = `${x + 10}px`;
       hoverText.style.top = `${Math.max(0, y - 24)}px`;
-      hoverText.textContent = `${cmX}, ${cmY}`;
+      hoverText.textContent = region
+        ? `${region.name} ${region.team === "blue" ? "藍方" : "紅方"} / ${cmX}, ${cmY}`
+        : `${cmX}, ${cmY}`;
     });
 
     overlay.addEventListener("mouseleave", () => {
@@ -749,6 +972,10 @@
     });
 
     document.getElementById("exportBtn").addEventListener("click", exportPluginJson);
+    document.getElementById("loadDefaultImageBtn").addEventListener("click", loadDefaultImage);
+    document.getElementById("loadDefaultAreaBtn").addEventListener("click", loadDefaultArea);
+    document.getElementById("importCppBtn").addEventListener("click", importCppText);
+    document.getElementById("clearCppRegionsBtn").addEventListener("click", clearCppRegions);
     document.getElementById("importBtn").addEventListener("click", () => {
       if (importPluginJson()) {
         setStatus("已從文字框載入 JSON");
@@ -788,6 +1015,8 @@
     }
     if (query.get("image_uri")) {
       mapImage.src = query.get("image_uri");
+    } else {
+      loadDefaultImage();
     }
     const pluginB64 = query.get("plugin_b64");
     const pluginUri = query.get("plugin_uri");
@@ -802,8 +1031,12 @@
     refreshOverlayCursor();
     updateCustomPreview();
     renderTable();
+    renderRegionStats();
     renderCustomStats();
     renderCustomTable();
+    if (!pluginB64 && !pluginUri) {
+      loadDefaultArea();
+    }
   </script>
 </body>
 </html>
