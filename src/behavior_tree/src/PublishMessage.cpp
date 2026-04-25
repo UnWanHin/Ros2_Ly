@@ -23,6 +23,9 @@ namespace BehaviorTree {
         }
         if(publishNaviGoal_ && naviCommandRateClock.trigger()) {
             naviCommandRateClock.tick();
+            if (!naviGoalPublishAllowed_) {
+                return;
+            }
             const bool use_tf_goal_bridge =
                 config.NaviSettings.UseXY &&
                 config.NaviSettings.UseTfGoalBridge &&

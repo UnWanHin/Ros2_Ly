@@ -41,6 +41,7 @@ docs/
 [modules/auto_aim_common.md](modules/auto_aim_common.md)
 6. 哨兵专项（2026 姿态机制）
 [sentry/decision_runtime_behavior.md](sentry/decision_runtime_behavior.md)  
+[sentry/sentry_decision_zone_blocks.md](sentry/sentry_decision_zone_blocks.md)  
 [sentry/sentry_decision_autoaim_manual.md](sentry/sentry_decision_autoaim_manual.md)  
 [sentry/optional_items_demo_runbook.md](sentry/optional_items_demo_runbook.md)  
 [sentry/showcase_demo_runbook.md](sentry/showcase_demo_runbook.md)  

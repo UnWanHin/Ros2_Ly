@@ -135,6 +135,24 @@ namespace BehaviorTree {
         return std::nullopt;
     }
 
+    std::optional<Area::MainAreaKind> MainAreaKindFromToken(std::string_view token) {
+        const auto normalized = NormalizeDecisionModule(token);
+        if (normalized == "base") {
+            return Area::MainAreaKind::Base;
+        }
+        if (normalized == "highland" || normalized == "high_land" || normalized == "high") {
+            return Area::MainAreaKind::Highland;
+        }
+        if (normalized == "roadland" || normalized == "road_land" || normalized == "road") {
+            return Area::MainAreaKind::Roadland;
+        }
+        if (normalized == "central" || normalized == "center" ||
+            normalized == "centre" || normalized == "middle") {
+            return Area::MainAreaKind::Central;
+        }
+        return std::nullopt;
+    }
+
     Area::Point<std::uint16_t> GoalPointByBaseId(const std::uint8_t base_goal_id, const UnitTeam goal_team) {
         switch (base_goal_id) {
             case LangYa::Home.ID: return BehaviorTree::Area::Home(goal_team);
@@ -1296,6 +1314,117 @@ namespace BehaviorTree {
             : base_goal_id;
     }
 
+    bool Application::IsNaviGoalAreaScopeEnabled() const noexcept {
+        return config.DecisionAutonomySettings.Enable &&
+               config.DecisionAutonomySettings.NaviGoal.UseAreaScope;
+    }
+
+    bool Application::IsNaviGoalAllowedByAreaScope(
+        const std::uint8_t base_goal_id,
+        const UnitTeam goal_team,
+        const UnitTeam my_team,
+        const UnitTeam enemy_team) const {
+        if (!IsNaviGoalAreaScopeEnabled()) {
+            return true;
+        }
+        if (!IsValidBaseGoalId(base_goal_id)) {
+            return false;
+        }
+        if (goal_team != UnitTeam::Red && goal_team != UnitTeam::Blue) {
+            return false;
+        }
+
+        const std::vector<std::string>* allowed_areas = nullptr;
+        if (goal_team == my_team) {
+            allowed_areas = &config.DecisionAutonomySettings.NaviGoal.MyArea;
+        } else if (goal_team == enemy_team) {
+            allowed_areas = &config.DecisionAutonomySettings.NaviGoal.EnemyArea;
+        } else {
+            return false;
+        }
+        if (allowed_areas == nullptr || allowed_areas->empty()) {
+            return false;
+        }
+
+        const auto goal_point = GoalPointByBaseId(base_goal_id, goal_team);
+        for (const auto& area_token : *allowed_areas) {
+            const auto area_kind = MainAreaKindFromToken(area_token);
+            if (!area_kind.has_value()) {
+                continue;
+            }
+            if (Area::IsPointInsideMainArea(
+                    goal_team,
+                    *area_kind,
+                    static_cast<int>(goal_point.x),
+                    static_cast<int>(goal_point.y))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool Application::TrySetScopedPositionByBaseGoal(
+        const std::uint8_t base_goal_id,
+        const UnitTeam goal_team,
+        const UnitTeam my_team,
+        const UnitTeam enemy_team,
+        const bool apply_team_offset,
+        const char* reason) {
+        if (!IsNaviGoalAllowedByAreaScope(base_goal_id, goal_team, my_team, enemy_team)) {
+            naviGoalPublishAllowed_ = false;
+            if (LoggerPtr) {
+                LoggerPtr->Info(
+                    "DecisionAutonomy[navi_goal_area]: block goal={} team={} reason={}",
+                    static_cast<int>(ResolveGoalId(base_goal_id, goal_team, apply_team_offset)),
+                    goal_team == my_team ? "my" : "enemy",
+                    reason ? reason : "area_scope");
+            }
+            return false;
+        }
+
+        SetPositionByBaseGoal(base_goal_id, goal_team, apply_team_offset);
+        return true;
+    }
+
+    bool Application::TrySetRandomScopedPositionByBaseGoal(
+        const std::vector<std::pair<std::uint8_t, UnitTeam>>& goals,
+        const UnitTeam my_team,
+        const UnitTeam enemy_team,
+        const char* reason) {
+        std::vector<std::pair<std::uint8_t, UnitTeam>> allowed_goals;
+        allowed_goals.reserve(goals.size());
+        for (const auto& goal : goals) {
+            if (!IsValidBaseGoalId(goal.first)) {
+                continue;
+            }
+            if (IsNaviGoalAllowedByAreaScope(goal.first, goal.second, my_team, enemy_team)) {
+                allowed_goals.push_back(goal);
+            }
+        }
+        if (allowed_goals.empty()) {
+            if (IsNaviGoalAreaScopeEnabled()) {
+                naviGoalPublishAllowed_ = false;
+                if (LoggerPtr) {
+                    LoggerPtr->Info(
+                        "DecisionAutonomy[navi_goal_area]: block all random goals reason={}",
+                        reason ? reason : "area_scope");
+                }
+            }
+            return false;
+        }
+
+        Random random;
+        const auto index = random.Get(0, static_cast<int>(allowed_goals.size()) - 1);
+        const auto& selected = allowed_goals[static_cast<std::size_t>(index)];
+        return TrySetScopedPositionByBaseGoal(
+            selected.first,
+            selected.second,
+            my_team,
+            enemy_team,
+            true,
+            reason);
+    }
+
     void Application::SetPositionByBaseGoal(
         const std::uint8_t base_goal_id,
         const UnitTeam goal_team,
@@ -1303,6 +1432,7 @@ namespace BehaviorTree {
         auto assign_position = [&](const auto& goal_location, const auto& area_location) {
             naviCommandGoal = apply_team_offset ? goal_location(goal_team) : goal_location.ID;
             naviGoalPosition = area_location(goal_team);
+            naviGoalPublishAllowed_ = true;
         };
 
         switch (base_goal_id) {
@@ -1920,6 +2050,7 @@ namespace BehaviorTree {
 
         std::vector<RuntimeNaviGoalCandidate> candidates;
         candidates.reserve(options.size());
+        int area_filtered_count = 0;
         for (const auto& option : options) {
             if (!option.Enable) {
                 continue;
@@ -1927,13 +2058,26 @@ namespace BehaviorTree {
             if (!IsValidBaseGoalId(option.GoalId)) {
                 continue;
             }
+            const UnitTeam candidate_team =
+                NormalizeDecisionModule(option.Team) == "enemy" ? enemy_team : my_team;
+            if (!IsNaviGoalAllowedByAreaScope(option.GoalId, candidate_team, my_team, enemy_team)) {
+                ++area_filtered_count;
+                continue;
+            }
             candidates.push_back(RuntimeNaviGoalCandidate{
                 .BaseGoalId = option.GoalId,
-                .Team = NormalizeDecisionModule(option.Team) == "enemy" ? enemy_team : my_team,
+                .Team = candidate_team,
                 .Bias = option.Bias
             });
         }
         if (candidates.empty()) {
+            if (IsNaviGoalAreaScopeEnabled() && area_filtered_count > 0) {
+                naviGoalPublishAllowed_ = false;
+                LoggerPtr->Info(
+                    "DecisionAutonomy[navi_goal]: all {} candidates blocked by MyArea/EnemyArea scope.",
+                    area_filtered_count);
+                return true;
+            }
             return false;
         }
 
@@ -1990,7 +2134,15 @@ namespace BehaviorTree {
             return false;
         }
 
-        SetPositionByBaseGoal(best_candidate->BaseGoalId, best_candidate->Team, true);
+        if (!TrySetScopedPositionByBaseGoal(
+                best_candidate->BaseGoalId,
+                best_candidate->Team,
+                my_team,
+                enemy_team,
+                true,
+                "utility_pick")) {
+            return true;
+        }
 
         int hold_sec = 10;
         if (strategy_mode == StrategyMode::Protected) {
@@ -2031,23 +2183,29 @@ namespace BehaviorTree {
         if(!naviCommandIntervalClock.trigger()) {
             return;
         }        
-        if(aimMode == AimMode::Buff) { 
-            SET_POSITION(BuffShoot, MyTeam); // 打符
+        if(aimMode == AimMode::Buff) {
+            TrySetScopedPositionByBaseGoal(
+                LangYa::BuffShoot.ID, MyTeam, MyTeam, EnemyTeam, true, "protect_buff");
             naviCommandIntervalClock.reset(Seconds(2));
             // speedLevel = 2; //加速
         }else if (aimMode == AimMode::Outpost) {
-            SET_POSITION(OutpostShoot, MyTeam);
+            TrySetScopedPositionByBaseGoal(
+                LangYa::OutpostShoot.ID, MyTeam, MyTeam, EnemyTeam, true, "protect_outpost");
             naviCommandIntervalClock.reset(Seconds(2));
             // speedLevel = 1; // 正常
         }else { //普通模式
             if (!TrySetNaviGoalByAutonomy(StrategyMode::Protected, MyTeam, EnemyTeam)) {
-                Random random;
-                int random_number = random.Get(0, 6);
-                if (random_number == 0) SET_POSITION(CastleLeft, MyTeam);
-                else if (random_number == 1) SET_POSITION(CastleRight1, MyTeam);
-                else if (random_number == 2) SET_POSITION(CastleRight2, MyTeam);
-                else SET_POSITION(BuffShoot, MyTeam);
-                if(naviCommandGoal == BuffShoot(MyTeam)) naviCommandIntervalClock.reset(Seconds{30});
+                const bool selected = TrySetRandomScopedPositionByBaseGoal(
+                    {
+                        {LangYa::CastleLeft.ID, MyTeam},
+                        {LangYa::CastleRight1.ID, MyTeam},
+                        {LangYa::CastleRight2.ID, MyTeam},
+                        {LangYa::BuffShoot.ID, MyTeam}
+                    },
+                    MyTeam,
+                    EnemyTeam,
+                    "protect_fallback");
+                if(selected && naviCommandGoal == BuffShoot(MyTeam)) naviCommandIntervalClock.reset(Seconds{30});
                 else naviCommandIntervalClock.reset(Seconds(10));
             }
             // 时间超过5分钟 或 底盘能量低于5%
@@ -2120,18 +2278,18 @@ namespace BehaviorTree {
         if(!naviCommandIntervalClock.trigger()) {
             return;
         }
-        if(aimMode == AimMode::Buff) { 
-            SET_POSITION(BuffShoot, MyTeam); // 打符
+        if(aimMode == AimMode::Buff) {
+            TrySetScopedPositionByBaseGoal(
+                LangYa::BuffShoot.ID, MyTeam, MyTeam, EnemyTeam, true, "hit_sentry_buff");
             naviCommandIntervalClock.reset(Seconds(2));
             // speedLevel = 2;
         }else if (aimMode == AimMode::Outpost) {
-            SET_POSITION(OutpostShoot, MyTeam); // 打前哨站
+            TrySetScopedPositionByBaseGoal(
+                LangYa::OutpostShoot.ID, MyTeam, MyTeam, EnemyTeam, true, "hit_sentry_outpost");
             naviCommandIntervalClock.reset(Seconds(2));
             // speedLevel = 1;
         }else { //普通模式
             if (!TrySetNaviGoalByAutonomy(StrategyMode::HitSentry, MyTeam, EnemyTeam)) {
-                Random random;
-
                 // if(!hitableTargets.empty()) { // 视野里存在目标
                 //     bool low_health_enemy = false;
                 //     // 检测低血量敌人
@@ -2155,21 +2313,28 @@ namespace BehaviorTree {
                 }
                 
                 if(selfOutpostHealth > 100 && now_time < 55 ) {
-                    int random_number = random.Get(0, 8);
-                    if(random_number == 0) SET_POSITION(MidShoot, MyTeam);
-                    else if(random_number == 1) SET_POSITION(BuffAround1, MyTeam);
-                    else if(random_number == 2) SET_POSITION(BuffAround2, MyTeam);
-                    else if(random_number == 3) SET_POSITION(RightShoot, MyTeam);
-                    else if(random_number == 4) SET_POSITION(MidShoot, EnemyTeam);
-                    else if(random_number == 5) SET_POSITION(BuffAround1, EnemyTeam);
-                    else if(random_number == 6) SET_POSITION(BuffAround2, EnemyTeam);
-                    else if(random_number == 7) SET_POSITION(RightShoot, EnemyTeam);
-                    else if(random_number == 8) SET_POSITION(LeftShoot, EnemyTeam);
-                    if(naviCommandGoal == MidShoot(EnemyTeam) || naviCommandGoal == LeftShoot(EnemyTeam))
+                    const bool selected = TrySetRandomScopedPositionByBaseGoal(
+                        {
+                            {LangYa::MidShoot.ID, MyTeam},
+                            {LangYa::BuffAround1.ID, MyTeam},
+                            {LangYa::BuffAround2.ID, MyTeam},
+                            {LangYa::RightShoot.ID, MyTeam},
+                            {LangYa::MidShoot.ID, EnemyTeam},
+                            {LangYa::BuffAround1.ID, EnemyTeam},
+                            {LangYa::BuffAround2.ID, EnemyTeam},
+                            {LangYa::RightShoot.ID, EnemyTeam},
+                            {LangYa::LeftShoot.ID, EnemyTeam}
+                        },
+                        MyTeam,
+                        EnemyTeam,
+                        "hit_sentry_fallback");
+                    if(selected &&
+                       (naviCommandGoal == MidShoot(EnemyTeam) || naviCommandGoal == LeftShoot(EnemyTeam)))
                         naviCommandIntervalClock.reset(Seconds(8));
                     else naviCommandIntervalClock.reset(Seconds(10));
                 }else {
-                    SET_POSITION(FlyRoad, EnemyTeam);
+                    TrySetScopedPositionByBaseGoal(
+                        LangYa::FlyRoad.ID, EnemyTeam, MyTeam, EnemyTeam, true, "hit_sentry_late");
                     naviCommandIntervalClock.reset(Seconds(10));
                 }
             }
@@ -2177,7 +2342,8 @@ namespace BehaviorTree {
              // 底盘能量低于5%
             if(teamBuff.RemainingEnergy == 0b10000 || teamBuff.RemainingEnergy == 0b00000) {
                 LoggerPtr->Info("!!! Low Energy !!!");
-                SET_POSITION(HoleRoad, MyTeam);
+                TrySetScopedPositionByBaseGoal(
+                    LangYa::HoleRoad.ID, MyTeam, MyTeam, EnemyTeam, true, "hit_sentry_low_energy");
                 naviCommandIntervalClock.reset(Seconds(10));
                 speedLevel = 0;
             } // else speedLevel = 1;
@@ -2211,16 +2377,17 @@ namespace BehaviorTree {
         if(!naviCommandIntervalClock.trigger()) {
             return;
         }
-        if(aimMode == AimMode::Buff) { 
-            SET_POSITION(BuffShoot, MyTeam);
+        if(aimMode == AimMode::Buff) {
+            TrySetScopedPositionByBaseGoal(
+                LangYa::BuffShoot.ID, MyTeam, MyTeam, EnemyTeam, true, "hit_hero_buff");
             naviCommandIntervalClock.reset(Seconds(2));
             // speedLevel = 2;
         }else if (aimMode == AimMode::Outpost) {
-            SET_POSITION(OutpostShoot, MyTeam);
+            TrySetScopedPositionByBaseGoal(
+                LangYa::OutpostShoot.ID, MyTeam, MyTeam, EnemyTeam, true, "hit_hero_outpost");
             naviCommandIntervalClock.reset(Seconds(2));
             // speedLevel = 1;
         }else { //普通模式
-            Random random;
             const bool selected_by_autonomy =
                 TrySetNaviGoalByAutonomy(StrategyMode::HitHero, MyTeam, EnemyTeam);
             if (!selected_by_autonomy) {
@@ -2231,47 +2398,62 @@ namespace BehaviorTree {
 
                 if(hero_in_central) {
                     LoggerPtr->Debug("!!!Hero in highland!!!");
-                    SET_POSITION(BuffAround1, MyTeam);
+                    TrySetScopedPositionByBaseGoal(
+                        LangYa::BuffAround1.ID, MyTeam, MyTeam, EnemyTeam, true, "hit_hero_highland");
                 }else {
                     if(selfOutpostHealth > 200) {
                         int redpx = 982, redpy = 1124;
                         int dx = redpx - enemyRobots[UnitType::Hero].position_.X, dy = redpy - enemyRobots[UnitType::Hero].position_.Y;
                         int len = std::sqrt(dx * dx + dy * dy);
                         if(len < 100) {
-                            SET_POSITION(HoleRoad, EnemyTeam);
+                            TrySetScopedPositionByBaseGoal(
+                                LangYa::HoleRoad.ID, EnemyTeam, MyTeam, EnemyTeam, true, "hit_hero_close");
                             naviCommandIntervalClock.reset(Seconds(2));
                         }else {
-                            int random_number = random.Get(0, 8);
-                            if(random_number == 0) SET_POSITION(MidShoot, MyTeam);
-                            else if(random_number == 1) SET_POSITION(BuffAround1, MyTeam);
-                            else if(random_number == 2) SET_POSITION(BuffAround2, MyTeam);
-                            else if(random_number == 3) SET_POSITION(RightShoot, MyTeam);
-                            else if(random_number == 4) SET_POSITION(MidShoot, EnemyTeam);
-                            else if(random_number == 5) SET_POSITION(BuffAround1, EnemyTeam);
-                            else if(random_number == 6) SET_POSITION(BuffAround2, EnemyTeam);
-                            else if(random_number == 7) SET_POSITION(RightShoot, EnemyTeam);
-                            else if(random_number == 8) SET_POSITION(LeftShoot, EnemyTeam);
-                            if(naviCommandGoal == MidShoot(EnemyTeam) || naviCommandGoal == LeftShoot(EnemyTeam))
+                            const bool selected = TrySetRandomScopedPositionByBaseGoal(
+                                {
+                                    {LangYa::MidShoot.ID, MyTeam},
+                                    {LangYa::BuffAround1.ID, MyTeam},
+                                    {LangYa::BuffAround2.ID, MyTeam},
+                                    {LangYa::RightShoot.ID, MyTeam},
+                                    {LangYa::MidShoot.ID, EnemyTeam},
+                                    {LangYa::BuffAround1.ID, EnemyTeam},
+                                    {LangYa::BuffAround2.ID, EnemyTeam},
+                                    {LangYa::RightShoot.ID, EnemyTeam},
+                                    {LangYa::LeftShoot.ID, EnemyTeam}
+                                },
+                                MyTeam,
+                                EnemyTeam,
+                                "hit_hero_fallback");
+                            if(selected &&
+                               (naviCommandGoal == MidShoot(EnemyTeam) || naviCommandGoal == LeftShoot(EnemyTeam)))
                                 naviCommandIntervalClock.reset(Seconds(8));
                             else naviCommandIntervalClock.reset(Seconds(10));
                         }
                     }else {
                         if(selfBaseHealth > 2000){
-                            SET_POSITION(HoleRoad, EnemyTeam);
+                            TrySetScopedPositionByBaseGoal(
+                                LangYa::HoleRoad.ID, EnemyTeam, MyTeam, EnemyTeam, true, "hit_hero_base_high");
                             naviCommandIntervalClock.reset(Seconds(2));
                         }
                         else {
-                            int random_number = random.Get(0, 8);
-                            if(random_number == 0) SET_POSITION(MidShoot, MyTeam);
-                            else if(random_number == 1) SET_POSITION(BuffAround1, MyTeam);
-                            else if(random_number == 2) SET_POSITION(BuffAround2, MyTeam);
-                            else if(random_number == 3) SET_POSITION(RightShoot, MyTeam);
-                            else if(random_number == 4) SET_POSITION(MidShoot, EnemyTeam);
-                            else if(random_number == 5) SET_POSITION(BuffAround1, EnemyTeam);
-                            else if(random_number == 6) SET_POSITION(BuffAround2, EnemyTeam);
-                            else if(random_number == 7) SET_POSITION(RightShoot, EnemyTeam);
-                            else if(random_number == 8) SET_POSITION(LeftShoot, EnemyTeam);
-                            if(naviCommandGoal == MidShoot(EnemyTeam) || naviCommandGoal == LeftShoot(EnemyTeam))
+                            const bool selected = TrySetRandomScopedPositionByBaseGoal(
+                                {
+                                    {LangYa::MidShoot.ID, MyTeam},
+                                    {LangYa::BuffAround1.ID, MyTeam},
+                                    {LangYa::BuffAround2.ID, MyTeam},
+                                    {LangYa::RightShoot.ID, MyTeam},
+                                    {LangYa::MidShoot.ID, EnemyTeam},
+                                    {LangYa::BuffAround1.ID, EnemyTeam},
+                                    {LangYa::BuffAround2.ID, EnemyTeam},
+                                    {LangYa::RightShoot.ID, EnemyTeam},
+                                    {LangYa::LeftShoot.ID, EnemyTeam}
+                                },
+                                MyTeam,
+                                EnemyTeam,
+                                "hit_hero_base_low");
+                            if(selected &&
+                               (naviCommandGoal == MidShoot(EnemyTeam) || naviCommandGoal == LeftShoot(EnemyTeam)))
                                 naviCommandIntervalClock.reset(Seconds(8));
                             else naviCommandIntervalClock.reset(Seconds(10));
                         }
@@ -2282,10 +2464,15 @@ namespace BehaviorTree {
             // 底盘能量低于5%
             if(teamBuff.RemainingEnergy == 0b10000 || teamBuff.RemainingEnergy == 0b00000) {
                 LoggerPtr->Info("!!! Low Energy !!!");
-                int random_number = random.Get(0, 2);
-                if(random_number == 0) SET_POSITION(BuffAround1, MyTeam);
-                else if(random_number == 1) SET_POSITION(BuffAround2, MyTeam);
-                else if(random_number == 2) SET_POSITION(RightShoot, MyTeam);
+                TrySetRandomScopedPositionByBaseGoal(
+                    {
+                        {LangYa::BuffAround1.ID, MyTeam},
+                        {LangYa::BuffAround2.ID, MyTeam},
+                        {LangYa::RightShoot.ID, MyTeam}
+                    },
+                    MyTeam,
+                    EnemyTeam,
+                    "hit_hero_low_energy");
                 naviCommandIntervalClock.reset(Seconds(10));
                 speedLevel = 0;
             } // else speedLevel = 1;

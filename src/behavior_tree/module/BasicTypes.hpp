@@ -529,6 +529,9 @@ namespace LangYa
         std::vector<NaviGoalOption> HitHeroCandidates{};
         std::vector<NaviGoalOption> HitSentryCandidates{};
         std::vector<NaviGoalOption> ProtectCandidates{};
+        bool UseAreaScope{false};
+        std::vector<std::string> MyArea{};
+        std::vector<std::string> EnemyArea{};
         double DistanceWeight{1.0};
         double EnemyTeamBonus{0.25};
         double HeroProximityWeight{0.35};

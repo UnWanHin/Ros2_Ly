@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <utility>
 
 namespace {
 
@@ -24,6 +25,23 @@ std::string NormalizeAutonomyToken(std::string value) {
         return static_cast<char>(std::tolower(c));
     });
     return value;
+}
+
+std::string NormalizeMainAreaToken(std::string value) {
+    value = NormalizeAutonomyToken(std::move(value));
+    if (value == "base") {
+        return "base";
+    }
+    if (value == "highland" || value == "high_land" || value == "high") {
+        return "highland";
+    }
+    if (value == "roadland" || value == "road_land" || value == "road") {
+        return "roadland";
+    }
+    if (value == "central" || value == "center" || value == "centre" || value == "middle") {
+        return "central";
+    }
+    return {};
 }
 
 BehaviorTree::CompetitionProfile ParseCompetitionProfile(const std::string& value) {
@@ -315,6 +333,13 @@ namespace LangYa {
         if (j.contains("ProtectCandidates")) {
             j.at("ProtectCandidates").get_to(na.ProtectCandidates);
         }
+        na.UseAreaScope = j.value("UseAreaScope", na.UseAreaScope);
+        if (j.contains("MyArea")) {
+            j.at("MyArea").get_to(na.MyArea);
+        }
+        if (j.contains("EnemyArea")) {
+            j.at("EnemyArea").get_to(na.EnemyArea);
+        }
         na.DistanceWeight = j.value("DistanceWeight", na.DistanceWeight);
         na.EnemyTeamBonus = j.value("EnemyTeamBonus", na.EnemyTeamBonus);
         na.HeroProximityWeight = j.value("HeroProximityWeight", na.HeroProximityWeight);
@@ -496,6 +521,15 @@ namespace BehaviorTree {
             config.DecisionAutonomySettings.NaviGoal.EnemyTeamBonus,
             config.DecisionAutonomySettings.NaviGoal.HeroProximityWeight,
             config.DecisionAutonomySettings.NaviGoal.CurrentGoalBonus);
+        LoggerPtr->Debug("NaviGoal.UseAreaScope: {}", config.DecisionAutonomySettings.NaviGoal.UseAreaScope);
+        LoggerPtr->Debug("NaviGoal.MyArea:");
+        for (const auto& area : config.DecisionAutonomySettings.NaviGoal.MyArea) {
+            LoggerPtr->Debug("  {}", area);
+        }
+        LoggerPtr->Debug("NaviGoal.EnemyArea:");
+        for (const auto& area : config.DecisionAutonomySettings.NaviGoal.EnemyArea) {
+            LoggerPtr->Debug("  {}", area);
+        }
         LoggerPtr->Debug(
             "AimTargetWeights(priority/distance/low_health/current_target): {}/{}/{}/{}",
             config.DecisionAutonomySettings.AimTarget.PriorityWeight,
@@ -846,6 +880,39 @@ namespace BehaviorTree {
             autonomy.NaviGoal.ProtectCandidates.empty()) {
             LoggerPtr->Warning("DecisionAutonomy.NaviGoal.UseCustomCandidates=true but no valid candidates, fallback to built-in candidates.");
             autonomy.NaviGoal.UseCustomCandidates = false;
+        }
+
+        auto sanitize_area_list = [this](const std::vector<std::string>& areas,
+                                         const char* option_name) {
+            std::vector<std::string> sanitized_areas;
+            sanitized_areas.reserve(areas.size());
+            for (const auto& area : areas) {
+                const auto normalized = NormalizeMainAreaToken(area);
+                if (normalized.empty()) {
+                    LoggerPtr->Warning("Ignore invalid DecisionAutonomy.{} area '{}'.",
+                                       option_name, area);
+                    continue;
+                }
+                if (std::find(sanitized_areas.begin(),
+                              sanitized_areas.end(),
+                              normalized) != sanitized_areas.end()) {
+                    continue;
+                }
+                sanitized_areas.push_back(normalized);
+            }
+            return sanitized_areas;
+        };
+        autonomy.NaviGoal.MyArea =
+            sanitize_area_list(autonomy.NaviGoal.MyArea, "NaviGoal.MyArea");
+        autonomy.NaviGoal.EnemyArea =
+            sanitize_area_list(autonomy.NaviGoal.EnemyArea, "NaviGoal.EnemyArea");
+        if (autonomy.NaviGoal.UseAreaScope) {
+            if (autonomy.NaviGoal.MyArea.empty()) {
+                LoggerPtr->Warning("DecisionAutonomy.NaviGoal.UseAreaScope=true but MyArea is empty; my-side navigation goals will be blocked.");
+            }
+            if (autonomy.NaviGoal.EnemyArea.empty()) {
+                LoggerPtr->Warning("DecisionAutonomy.NaviGoal.UseAreaScope=true but EnemyArea is empty; enemy-side navigation goals will be blocked.");
+            }
         }
 
         auto clamp_non_negative = [this](double& value, const char* key_name) {

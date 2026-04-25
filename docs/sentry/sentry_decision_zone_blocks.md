@@ -11,6 +11,29 @@
 - 後續新增區塊時，沿用 `<Team>-<block_name>` 的分組方式記錄。
 - 同一區塊先按紅藍分開，再按 `Custom ID` 編號遞增連線；若用作多邊形包含判定，第一點和最後一點相連形成閉合區域。
 
+## 決策配置語義
+
+程式內已把這批區塊作為 `MainArea` 決策區域使用，和舊的 `CastleRed` / `RoadLandRed` / `BaseRed` 等歷史區域保持分離。
+
+JSON 配置入口：
+
+```json
+"DecisionAutonomy": {
+  "Enable": true,
+  "NaviGoal": {
+    "UseAreaScope": true,
+    "MyArea": ["Base", "Highland", "Roadland"],
+    "EnemyArea": ["Base", "Highland", "Roadland"]
+  }
+}
+```
+
+- `MyArea` 表示我方活動區塊；`EnemyArea` 表示敵方活動區塊。
+- 程式會根據已識別隊伍自動映射：若本車是紅方，`MyArea` 使用 Red MainArea，`EnemyArea` 使用 Blue MainArea；若本車是藍方則相反。
+- `UseAreaScope=false` 時保持舊導航決策行為。
+- `UseAreaScope=true` 時，Utility 自評估候選點和正式策略 fallback 都會先檢查是否落在允許區塊內；不允許的點不參與評分，也不會發布對應 `goal_pos`。
+- Recovery 保命回補、NaviTest 調試路線、League/Showcase 專用路線仍按原硬規則執行，不受這個作戰區域調參限制。
+
 ## Red-roadland
 
 | Custom ID | Label | Team | X(cm) | Y(cm) |

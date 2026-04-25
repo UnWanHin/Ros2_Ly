@@ -27,6 +27,7 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <utility>
 
 #include "Utils/Logger.hpp"
 
@@ -94,6 +95,7 @@ inline const char* CompetitionProfileToString(const CompetitionProfile profile) 
     do { \
         naviCommandGoal = LangYa::area(team); \
         naviGoalPosition = BehaviorTree::Area::area(team); \
+        naviGoalPublishAllowed_ = true; \
     } while(0)
 
 
@@ -187,6 +189,7 @@ private:
 
     std::uint8_t naviCommandGoal{0}; // 导航目标
     Area::Point<std::uint16_t> naviGoalPosition{}; // 导航定位目标
+    bool naviGoalPublishAllowed_{true};
     std::uint8_t lastNaviComnamdGoal{0}; // 上一次导航目标
     VelocityType naviVelocityInput{0, 0}; /// 外部导航输入速度（/ly/navi/vel）
     VelocityType naviVelocity{0, 0}; /// 定义回调，接收导航的速度控制数据
@@ -404,6 +407,24 @@ public:
         UnitTeam goal_team,
         bool apply_team_offset,
         const char* reason);
+    bool IsNaviGoalAreaScopeEnabled() const noexcept;
+    bool IsNaviGoalAllowedByAreaScope(
+        std::uint8_t base_goal_id,
+        UnitTeam goal_team,
+        UnitTeam my_team,
+        UnitTeam enemy_team) const;
+    bool TrySetScopedPositionByBaseGoal(
+        std::uint8_t base_goal_id,
+        UnitTeam goal_team,
+        UnitTeam my_team,
+        UnitTeam enemy_team,
+        bool apply_team_offset = true,
+        const char* reason = nullptr);
+    bool TrySetRandomScopedPositionByBaseGoal(
+        const std::vector<std::pair<std::uint8_t, UnitTeam>>& goals,
+        UnitTeam my_team,
+        UnitTeam enemy_team,
+        const char* reason = nullptr);
     void SetPositionByBaseGoal(std::uint8_t base_goal_id, UnitTeam team, bool apply_team_offset = true);
     std::uint8_t ResolveGoalId(std::uint8_t base_goal_id, UnitTeam team, bool apply_team_offset = true) const noexcept;
     void SetAimTarget();

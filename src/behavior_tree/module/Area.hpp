@@ -5,9 +5,12 @@
 //re-build 不用改
 #pragma once
 
+#include <algorithm>
 #include <vector>
 #include <limits>
 #include <cstdint>
+#include <stdexcept>
+#include <utility>
 #include "BasicTypes.hpp"
 
 using namespace LangYa;
@@ -183,6 +186,208 @@ namespace Area {
     static const Area<std::uint16_t> BaseBlue{baseBluePoints};
     static const Area<std::uint16_t> FlyLandRed{flyLandRedPoints};
     static const Area<std::uint16_t> FlyLandBlue{flyLandBluePoints};
+
+    enum class MainAreaKind : std::uint8_t {
+        Base = 0,
+        Highland = 1,
+        Roadland = 2,
+        Central = 3
+    };
+
+    static const std::vector<Point<int>> RedMainAreaRoadlandPoints = {
+        { 685, 368 },
+        { 391, 373 },
+        { 389, 13 },
+        { 753, 235 },
+        { 1217, 24 },
+        { 1228, 263 },
+        { 1026, 265 }
+    };
+
+    static const std::vector<Point<int>> BlueMainAreaRoadlandPoints = {
+        { 2115, 1132 },
+        { 2409, 1127 },
+        { 2411, 1487 },
+        { 2047, 1265 },
+        { 1583, 1476 },
+        { 1572, 1237 },
+        { 1774, 1235 }
+    };
+
+    static const std::vector<Point<int>> RedMainAreaHighlandPoints = {
+        { 313, 1065 },
+        { 315, 1497 },
+        { 1221, 1494 },
+        { 1226, 1400 },
+        { 976, 1403 },
+        { 744, 1077 }
+    };
+
+    static const std::vector<Point<int>> BlueMainAreaHighlandPoints = {
+        { 2487, 435 },
+        { 2485, 3 },
+        { 1579, 6 },
+        { 1574, 100 },
+        { 1824, 97 },
+        { 2056, 423 }
+    };
+
+    static const std::vector<Point<int>> RedMainAreaBasePoints = {
+        { 38, 997 },
+        { 765, 1010 },
+        { 1040, 1368 },
+        { 1253, 1384 },
+        { 1256, 1318 },
+        { 999, 958 },
+        { 992, 508 },
+        { 1040, 400 },
+        { 1042, 325 },
+        { 735, 327 },
+        { 687, 423 },
+        { 334, 423 },
+        { 338, 22 },
+        { 143, 22 },
+        { 157, 196 },
+        { 100, 201 },
+        { 109, 299 },
+        { 13, 315 }
+    };
+
+    static const std::vector<Point<int>> BlueMainAreaBasePoints = {
+        { 2762, 503 },
+        { 2035, 490 },
+        { 1760, 132 },
+        { 1547, 116 },
+        { 1544, 182 },
+        { 1801, 542 },
+        { 1808, 992 },
+        { 1760, 1100 },
+        { 1758, 1175 },
+        { 2065, 1173 },
+        { 2113, 1077 },
+        { 2466, 1077 },
+        { 2462, 1478 },
+        { 2657, 1478 },
+        { 2643, 1304 },
+        { 2700, 1299 },
+        { 2691, 1201 },
+        { 2787, 1185 }
+    };
+
+    static const std::vector<Point<int>> RedMainAreaCentralPoints = {
+        { 1187, 269 },
+        { 1182, 471 },
+        { 1047, 469 },
+        { 1029, 533 },
+        { 1022, 953 },
+        { 1235, 1247 },
+        { 1618, 1247 },
+        { 1606, 1031 },
+        { 1753, 1033 },
+        { 1778, 990 },
+        { 1755, 558 },
+        { 1565, 260 }
+    };
+
+    static const std::vector<Point<int>> BlueMainAreaCentralPoints = {
+        { 1613, 1231 },
+        { 1618, 1029 },
+        { 1753, 1031 },
+        { 1771, 967 },
+        { 1778, 547 },
+        { 1565, 253 },
+        { 1182, 253 },
+        { 1194, 469 },
+        { 1047, 467 },
+        { 1022, 510 },
+        { 1045, 942 },
+        { 1235, 1240 }
+    };
+
+    inline const char* MainAreaKindName(const MainAreaKind kind) {
+        switch (kind) {
+            case MainAreaKind::Base: return "base";
+            case MainAreaKind::Highland: return "highland";
+            case MainAreaKind::Roadland: return "roadland";
+            case MainAreaKind::Central: return "central";
+            default: return "unknown";
+        }
+    }
+
+    inline const std::vector<Point<int>>& MainAreaBoundary(
+        const UnitTeam team,
+        const MainAreaKind kind) {
+        const bool is_blue = team == UnitTeam::Blue;
+        switch (kind) {
+            case MainAreaKind::Base:
+                return is_blue ? BlueMainAreaBasePoints : RedMainAreaBasePoints;
+            case MainAreaKind::Highland:
+                return is_blue ? BlueMainAreaHighlandPoints : RedMainAreaHighlandPoints;
+            case MainAreaKind::Roadland:
+                return is_blue ? BlueMainAreaRoadlandPoints : RedMainAreaRoadlandPoints;
+            case MainAreaKind::Central:
+                return is_blue ? BlueMainAreaCentralPoints : RedMainAreaCentralPoints;
+            default:
+                return is_blue ? BlueMainAreaBasePoints : RedMainAreaBasePoints;
+        }
+    }
+
+    inline bool IsMainAreaBoundaryPointOnSegment(
+        const Point<int>& point,
+        const Point<int>& start,
+        const Point<int>& end) {
+        const long long cross =
+            static_cast<long long>(point.x - start.x) * static_cast<long long>(end.y - start.y) -
+            static_cast<long long>(point.y - start.y) * static_cast<long long>(end.x - start.x);
+        if (cross != 0) {
+            return false;
+        }
+        return point.x >= std::min(start.x, end.x) &&
+               point.x <= std::max(start.x, end.x) &&
+               point.y >= std::min(start.y, end.y) &&
+               point.y <= std::max(start.y, end.y);
+    }
+
+    inline bool IsPointInsideMainAreaBoundary(
+        const std::vector<Point<int>>& boundary,
+        const int x,
+        const int y) {
+        if (boundary.size() < 3) {
+            return false;
+        }
+
+        const Point<int> point{x, y};
+        bool inside = false;
+        for (std::size_t i = 0, j = boundary.size() - 1; i < boundary.size(); j = i++) {
+            const auto& pi = boundary[i];
+            const auto& pj = boundary[j];
+            if (IsMainAreaBoundaryPointOnSegment(point, pj, pi)) {
+                return true;
+            }
+            if ((pi.y > y) != (pj.y > y)) {
+                const double intersect_x =
+                    static_cast<double>(pj.x - pi.x) *
+                    static_cast<double>(y - pi.y) /
+                    static_cast<double>(pj.y - pi.y) +
+                    static_cast<double>(pi.x);
+                if (static_cast<double>(x) < intersect_x) {
+                    inside = !inside;
+                }
+            }
+        }
+        return inside;
+    }
+
+    inline bool IsPointInsideMainArea(
+        const UnitTeam team,
+        const MainAreaKind kind,
+        const int x,
+        const int y) {
+        if (team != UnitTeam::Red && team != UnitTeam::Blue) {
+            return false;
+        }
+        return IsPointInsideMainAreaBoundary(MainAreaBoundary(team, kind), x, y);
+    }
 
     // 特殊点 {Red, Blue}
     static const Location<std::uint16_t> Home{ {393, 810}, {2408, 683} };
