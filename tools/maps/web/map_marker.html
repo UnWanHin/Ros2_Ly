@@ -57,6 +57,10 @@
           <input type="checkbox" id="showTagToggle" checked />
           顯示 Tag
         </label>
+        <label>
+          <input type="checkbox" id="mirrorToggle" />
+          鏡像另一隊
+        </label>
         <button id="undoBtn">撤銷上一次點選</button>
         <button id="clearBtn">清空當前點位(當前隊伍)</button>
         <button id="exportBtn">匯出 map_plugin.json</button>
@@ -185,6 +189,7 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
     const jsonText = document.getElementById("jsonText");
     const pluginFileInput = document.getElementById("pluginFileInput");
     const showTagToggle = document.getElementById("showTagToggle");
+    const mirrorToggle = document.getElementById("mirrorToggle");
     const pointStats = document.getElementById("pointStats");
     const customStats = document.getElementById("customStats");
     const regionStats = document.getElementById("regionStats");
@@ -254,6 +259,18 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       return team === "blue" ? "blue" : "red";
     }
 
+    function oppositeTeam(team) {
+      return normalizeTeam(team) === "red" ? "blue" : "red";
+    }
+
+    function mirrorPoint(value) {
+      const size = mapSize();
+      return [
+        Math.round(size.width - value[0]),
+        Math.round(size.height - value[1])
+      ];
+    }
+
     function buildCustomPointFromInput() {
       const x = Number(customX.value);
       const y = Number(customY.value);
@@ -271,6 +288,38 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       drawAll();
     }
 
+    function appendCustomPoint(input) {
+      const point = { customId: state.nextCustomId, ...input };
+      state.nextCustomId += 1;
+      state.customPoints.push(point);
+      return point;
+    }
+
+    function buildMirroredCustomPoint(input) {
+      const [mirrorX, mirrorY] = mirrorPoint([input.x, input.y]);
+      return {
+        ...input,
+        team: oppositeTeam(input.team),
+        x: mirrorX,
+        y: mirrorY
+      };
+    }
+
+    function addCustomPoint(input, prefix) {
+      const point = appendCustomPoint(input);
+      if (mirrorToggle.checked) {
+        const mirror = appendCustomPoint(buildMirroredCustomPoint(input));
+        state.history.push({ kind: "custom_add", customIds: [point.customId, mirror.customId] });
+        setStatus(
+          `${prefix} C${point.customId} (${point.x}, ${point.y})，` +
+          `鏡像 C${mirror.customId} (${mirror.x}, ${mirror.y})`
+        );
+      } else {
+        state.history.push({ kind: "custom_add", customId: point.customId });
+        setStatus(`${prefix} C${point.customId} (${point.x}, ${point.y})`);
+      }
+    }
+
     function addCustomPointFromInput() {
       const input = buildCustomPointFromInput();
       if (!input) {
@@ -278,11 +327,7 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
         return false;
       }
       state.lastAutoCustomSnapshot = `${input.label}|${input.team}|${input.x}|${input.y}`;
-      const point = { customId: state.nextCustomId, ...input };
-      state.nextCustomId += 1;
-      state.customPoints.push(point);
-      state.history.push({ kind: "custom_add", customId: point.customId });
-      setStatus(`已新增自定義點 C${point.customId} (${point.x}, ${point.y})`);
+      addCustomPoint(input, "已新增自定義點");
       drawAll();
       return true;
     }
@@ -298,11 +343,7 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       customY.value = String(input.y);
       state.customPreview = { ...input };
       state.lastAutoCustomSnapshot = `${input.label}|${input.team}|${input.x}|${input.y}`;
-      const point = { customId: state.nextCustomId, ...input };
-      state.nextCustomId += 1;
-      state.customPoints.push(point);
-      state.history.push({ kind: "custom_add", customId: point.customId });
-      setStatus(`已用右鍵新增自定義點 C${point.customId} (${point.x}, ${point.y})`);
+      addCustomPoint(input, "已用右鍵新增自定義點");
       drawAll();
       return true;
     }
@@ -475,10 +516,9 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       }
     }
 
-    function drawCustomPreview() {
-      if (!state.customPreview) return;
-      const [x, y] = toScreen(state.customPreview.x, state.customPreview.y);
-      const style = TEAM_STYLE[state.customPreview.team];
+    function drawCustomPreviewPoint(preview, tagText) {
+      const [x, y] = toScreen(preview.x, preview.y);
+      const style = TEAM_STYLE[preview.team];
       ctx.save();
       ctx.setLineDash([4, 3]);
       ctx.strokeStyle = style.color;
@@ -494,7 +534,16 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       ctx.stroke();
       ctx.restore();
       if (showTagToggle.checked) {
-        drawTag(x, y, `預覽:${state.customPreview.label}`, style.color);
+        drawTag(x, y, tagText, style.color);
+      }
+    }
+
+    function drawCustomPreview() {
+      if (!state.customPreview) return;
+      drawCustomPreviewPoint(state.customPreview, `預覽:${state.customPreview.label}`);
+      if (mirrorToggle.checked) {
+        const mirrorPreview = buildMirroredCustomPoint(state.customPreview);
+        drawCustomPreviewPoint(mirrorPreview, `鏡像:${mirrorPreview.label}`);
       }
     }
 
@@ -885,9 +934,21 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       if (!target) return;
       const value = toCm(x, y);
       const prev = target[team] ? [...target[team]] : null;
-      state.history.push({ kind: "preset", id, team, prev });
       target[team] = value;
-      setStatus(`已標記 ${team === "red" ? "紅" : "藍"}方 ID=${id} (${value[0]}, ${value[1]})`);
+      if (mirrorToggle.checked) {
+        const mirrorTeam = oppositeTeam(team);
+        const mirrorValue = mirrorPoint(value);
+        const mirrorPrev = target[mirrorTeam] ? [...target[mirrorTeam]] : null;
+        target[mirrorTeam] = mirrorValue;
+        state.history.push({ kind: "preset_mirror", id, team, prev, mirrorTeam, mirrorPrev });
+        setStatus(
+          `已標記 ${team === "red" ? "紅" : "藍"}方 ID=${id} (${value[0]}, ${value[1]})，` +
+          `鏡像 ${mirrorTeam === "red" ? "紅" : "藍"}方 (${mirrorValue[0]}, ${mirrorValue[1]})`
+        );
+      } else {
+        state.history.push({ kind: "preset", id, team, prev });
+        setStatus(`已標記 ${team === "red" ? "紅" : "藍"}方 ID=${id} (${value[0]}, ${value[1]})`);
+      }
       drawAll();
     });
 
@@ -895,9 +956,12 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       const last = state.history.pop();
       if (!last) return;
       if (last.kind === "custom_add") {
-        const index = state.customPoints.findIndex(item => item.customId === last.customId);
-        if (index >= 0) state.customPoints.splice(index, 1);
-        setStatus(`已撤銷自定義點 C${last.customId}`);
+        const customIds = Array.isArray(last.customIds) ? last.customIds : [last.customId];
+        for (const customId of customIds) {
+          const index = state.customPoints.findIndex(item => item.customId === customId);
+          if (index >= 0) state.customPoints.splice(index, 1);
+        }
+        setStatus(`已撤銷自定義點 ${customIds.map(customId => `C${customId}`).join(", ")}`);
         drawAll();
         return;
       }
@@ -910,6 +974,13 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
       }
       const point = findPointById(last.id);
       if (!point) return;
+      if (last.kind === "preset_mirror") {
+        point[last.team] = last.prev;
+        point[last.mirrorTeam] = last.mirrorPrev;
+        setStatus(`已撤銷鏡像標記 ID=${last.id}`);
+        drawAll();
+        return;
+      }
       point[last.team] = last.prev;
       setStatus(`已撤銷 ${last.team === "red" ? "紅" : "藍"}方 ID=${last.id}`);
       drawAll();
@@ -928,6 +999,9 @@ static const std::vector&lt;Point&lt;std::uint16_t&gt;&gt; CastleRedPoints = {
     });
 
     showTagToggle.addEventListener("change", () => {
+      drawAll();
+    });
+    mirrorToggle.addEventListener("change", () => {
       drawAll();
     });
     pointSelect.addEventListener("change", () => drawAll());
