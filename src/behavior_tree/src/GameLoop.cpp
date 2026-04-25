@@ -22,6 +22,10 @@ namespace BehaviorTree {
         return normalized;
     }
 
+    float normalize_angle_near(float angle, float reference) {
+        return reference + static_cast<float>(std::remainder(angle - reference, 360.0f));
+    }
+
     namespace {
     constexpr std::uint8_t kMaxBaseGoalId = LangYa::OccupyArea.ID;
     constexpr std::uint8_t kLeagueRouteCompatViaGoalBaseId = LangYa::LeftHighLand.ID;  // base goal id=4
@@ -436,7 +440,9 @@ namespace BehaviorTree {
                         }
 
                         // mode2: 擺頭中心點以固定速度持續向右漂移。
-                        patrolScanCenterYaw_ += kPatrolSwingCenterDriftYawStep;
+                        patrolScanCenterYaw_ = normalize_angle_near(
+                            patrolScanCenterYaw_ + kPatrolSwingCenterDriftYawStep,
+                            gimbalAngles.Yaw);
 
                         const float half_range = kPatrolSwingHalfRangeDeg;
                         patrolScanOffsetYaw_ += static_cast<float>(patrolScanDirection_) * yaw_scan_step;
@@ -470,7 +476,7 @@ namespace BehaviorTree {
                     }
                     const auto current_time = std::chrono::steady_clock::now();
                     const float next_scan_yaw = (patrol_mode == 2 && patrolScanCenterInitialized_)
-                        ? (patrolScanCenterYaw_ + patrolScanOffsetYaw_)
+                        ? normalize_angle_near(patrolScanCenterYaw_ + patrolScanOffsetYaw_, gimbalAngles.Yaw)
                         : static_cast<float>(gimbalAngles.Yaw + yaw_scan_direction * yaw_scan_step);
                     nextAngles = GimbalAnglesType{
                         static_cast<AngleType>(next_scan_yaw),
