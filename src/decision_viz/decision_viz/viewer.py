@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import bisect
+import json
 import math
 import sys
 import time
@@ -80,6 +81,10 @@ class Viewer:
         self.follow_offset = max(0, int(follow_offset))
         self.last_follow_poll = time.perf_counter()
         self.streamer = streamer
+        self.live_ros_topics: dict[str, Any] = {}
+        self.live_ros_wall_time = 0.0
+        self.last_ros_monitor_poll = time.perf_counter()
+        self.live_goal_history: list[tuple[float, float]] = []
 
         window = as_dict(config.get("window"))
         self.width = int(window.get("width", 1500))
@@ -94,6 +99,16 @@ class Viewer:
 
         self.layers = as_dict(config.get("layers"))
         self.timeline_config = as_dict(config.get("timeline"))
+        self.ros_monitor = as_dict(config.get("ros_monitor"))
+        ros_state_file = str(self.ros_monitor.get("state_file", "")).strip()
+        self.ros_state_path: Path | None = Path(ros_state_file).expanduser().resolve() if ros_state_file else None
+        self.ros_monitor_poll_sec = max(0.02, self.to_float(self.ros_monitor.get("poll_sec"), 0.05))
+        self.ros_monitor_stale_sec = max(0.1, self.to_float(self.ros_monitor.get("stale_sec"), 1.0))
+        self.map_tags = as_dict(config.get("map_tags"))
+        self.goal_tags_expanded = bool(self.map_tags.get("goal_tags_expanded", False))
+        self.hover_goal_tags = bool(self.map_tags.get("hover_goal_tags", True))
+        self.goal_tag_hover_radius_px = max(4, int(self.map_tags.get("hover_radius_px", 18)))
+        self.goal_tag_button_rect = None
         self.colors_raw = as_dict(config.get("colors"))
         self.unit_styles = as_dict(config.get("unit_styles"))
         self.times = [record.t for record in records]
@@ -215,6 +230,10 @@ class Viewer:
                 self.poll_trace_updates()
                 self.last_follow_poll = now
 
+            if self.ros_state_path is not None and (now - self.last_ros_monitor_poll) >= self.ros_monitor_poll_sec:
+                self.poll_ros_topic_state()
+                self.last_ros_monitor_poll = now
+
             self.tick_match_clock(dt)
 
             if self.playing and len(self.records) > 1:
@@ -263,6 +282,8 @@ class Viewer:
             self.playback_speed = max(0.1, self.playback_speed / 1.5)
         elif key == pg.K_l:
             self.show_labels = not self.show_labels
+        elif key == pg.K_t:
+            self.goal_tags_expanded = not self.goal_tags_expanded
         elif key == pg.K_s:
             self.send_match_command("start")
         elif key == pg.K_p:
@@ -286,6 +307,9 @@ class Viewer:
                 else:
                     self.send_match_command(command)
                 return
+        if self.goal_tag_button_rect is not None and self.goal_tag_button_rect.collidepoint(event.pos):
+            self.goal_tags_expanded = not self.goal_tags_expanded
+            return
         track = self.timeline_rect()
         if track.collidepoint(event.pos):
             ratio = (event.pos[0] - track.x) / max(1, track.width)
@@ -320,6 +344,7 @@ class Viewer:
             self.match_started = False
             self.match_running = False
             self.playing = False
+            self.live_goal_history.clear()
             return
         if cmd in {"rewind", "forward", "set_time_left"}:
             try:
@@ -403,6 +428,19 @@ class Viewer:
         if at_tail:
             self.current_index = len(self.records) - 1
             self.current_time = self.records[self.current_index].t
+
+    def poll_ros_topic_state(self) -> None:
+        if self.ros_state_path is None or not self.ros_state_path.exists():
+            return
+        try:
+            with self.ros_state_path.open("r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+        except (OSError, json.JSONDecodeError):
+            return
+        topics = as_dict(payload.get("topics"))
+        self.live_ros_topics = topics
+        self.live_ros_wall_time = self.to_float(payload.get("wall_time"), 0.0)
+        self.update_live_goal_history()
 
     def map_area_rect(self) -> Any:
         return self.pg.Rect(18, 18, self.width - self.panel_w - 36, self.height - self.timeline_h - 32)
@@ -652,7 +690,8 @@ class Viewer:
             return
 
         styles = as_dict(structures.get("styles"))
-        show_labels = bool(structures.get("show_labels", False) or self.show_labels)
+        show_labels = bool(structures.get("show_labels", False) or self.goal_tags_expanded)
+        mouse_pos = self.pg.mouse.get_pos()
         overlay = self.pg.Surface((image_rect.width, image_rect.height), self.pg.SRCALPHA)
         labels: list[tuple[str, int, int]] = []
 
@@ -683,7 +722,12 @@ class Viewer:
                 local_center = (sx - image_rect.x, sy - image_rect.y)
                 self.pg.draw.circle(overlay, fill, local_center, radius_px)
                 self.pg.draw.circle(overlay, outline, local_center, radius_px, 2)
-                if show_labels:
+                hovered = (
+                    self.hover_goal_tags
+                    and math.hypot(mouse_pos[0] - sx, mouse_pos[1] - sy)
+                    <= max(radius_px, self.goal_tag_hover_radius_px)
+                )
+                if show_labels or hovered:
                     labels.append((label_name, sx + radius_px + 6, sy - 8))
                 continue
 
@@ -692,7 +736,12 @@ class Viewer:
                 continue
             self.pg.draw.polygon(overlay, fill, points)
             self.pg.draw.lines(overlay, outline, True, points, 2)
-            if show_labels:
+            screen_points = [(point[0] + image_rect.x, point[1] + image_rect.y) for point in points]
+            xs = [point[0] for point in screen_points]
+            ys = [point[1] for point in screen_points]
+            bounds = self.pg.Rect(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+            hovered = self.hover_goal_tags and bounds.inflate(self.goal_tag_hover_radius_px, self.goal_tag_hover_radius_px).collidepoint(mouse_pos)
+            if show_labels or hovered:
                 cx = round(sum(point[0] for point in points) / len(points)) + image_rect.x
                 cy = round(sum(point[1] for point in points) / len(points)) + image_rect.y
                 labels.append((label_name, cx + 4, cy - 10))
@@ -732,6 +781,7 @@ class Viewer:
 
     def draw_all_goals(self, image_rect: Any) -> None:
         pg = self.pg
+        mouse_pos = pg.mouse.get_pos()
         for goal_id, goal in self.goals.items():
             for side in ("red", "blue"):
                 pos = goal.get(side)
@@ -740,17 +790,14 @@ class Viewer:
                 sx, sy = self.field_to_screen(pos, image_rect)
                 pg.draw.circle(self.screen, self.palette["black"], (sx, sy), 5)
                 pg.draw.circle(self.screen, self.palette[side], (sx, sy), 4)
-                if self.show_labels:
-                    self.draw_text(
-                        f"{goal_id}:{goal.get('name', '')}",
-                        sx + 6,
-                        sy - 7,
-                        self.small_font,
-                        self.palette["text"],
-                        160,
-                    )
+                hovered = self.hover_goal_tags and math.hypot(mouse_pos[0] - sx, mouse_pos[1] - sy) <= self.goal_tag_hover_radius_px
+                if self.goal_tags_expanded or hovered:
+                    suffix = f" {side}" if self.goal_tags_expanded else f" {side} {pos[0]:.0f},{pos[1]:.0f}"
+                    self.draw_label(f"{goal_id}:{goal.get('name', '')}{suffix}", sx + 6, sy - 10, image_rect)
 
     def path_points(self) -> list[tuple[float, float]]:
+        if self.live_goal_history:
+            return self.live_goal_history
         points: list[tuple[float, float]] = []
         last_goal: tuple[int, str, tuple[float, float] | None] | None = None
         limit = int(self.timeline_config.get("path_history_limit", 500))
@@ -777,7 +824,8 @@ class Viewer:
     def draw_current_goal(self, image_rect: Any) -> None:
         pg = self.pg
         record = self.records[self.current_index]
-        pos = record_position(record, self.goals)
+        live_pos = self.live_goal_position("/ly/navi/goal_pos")
+        pos = live_pos if live_pos is not None else record_position(record, self.goals)
         if pos is None:
             return
         sx, sy = self.field_to_screen(pos, image_rect)
@@ -786,7 +834,10 @@ class Viewer:
         pg.draw.circle(self.screen, self.palette["black"], (sx, sy), 15 + pulse)
         pg.draw.circle(self.screen, side_color, (sx, sy), 12 + pulse)
         pg.draw.circle(self.screen, self.palette["white"], (sx, sy), 5)
-        label = f"{record.output.goal_name} id={record.output.goal_id}"
+        if live_pos is not None:
+            label = f"LIVE /ly/navi/goal_pos {pos[0]:.0f},{pos[1]:.0f}"
+        else:
+            label = f"TRACE {record.output.goal_name} id={record.output.goal_id}"
         self.draw_label(label, sx + 14, sy - 30, image_rect)
 
     def draw_units(self, image_rect: Any) -> None:
@@ -859,6 +910,7 @@ class Viewer:
             rect.width - 36,
         )
         y = self.draw_match_controls(x, y + 6, rect.width - 36, record)
+        y = self.draw_map_tag_controls(x, y, rect.width - 36)
         if self.bad_lines:
             y = self.draw_text(f"Skipped bad lines: {self.bad_lines}", x, y, self.small_font, self.palette["enemy"], rect.width - 36)
         y += 10
@@ -871,6 +923,7 @@ class Viewer:
         ], rect.width - 36)
         y = self.draw_section(x, y, "Decision Output", [
             ("Kind", record.output.kind),
+            ("UseXY", self.use_xy_text(record.output)),
             ("Goal", f"{record.output.goal_name} ({record.output.goal_id})"),
             ("Side", record.output.goal_side),
             ("Speed", str(record.output.speed_level)),
@@ -878,6 +931,7 @@ class Viewer:
             ("Topic", record.output.topic_text()),
             ("Publish", record.output.publish_text()),
         ], rect.width - 36)
+        y = self.draw_section(x, y, "ROS Output", self.ros_output_rows(record), rect.width - 36)
         y = self.draw_section(x, y, "Posture", [
             ("Command", record.posture_command),
             ("State", record.posture_state),
@@ -945,6 +999,22 @@ class Viewer:
         pg.draw.line(self.screen, self.palette["line"], (x, y), (x + max_width, y), 1)
         return y + 8
 
+    def draw_map_tag_controls(self, x: int, y: int, max_width: int) -> int:
+        pg = self.pg
+        y += 2
+        state = "expanded" if self.goal_tags_expanded else "hover"
+        label = f"Map Tags: {state}"
+        y = self.draw_text(label, x, y, self.small_font, self.palette["muted"], max_width - 118)
+        button_w = 108
+        button_h = 24
+        rect = pg.Rect(x + max_width - button_w, y - button_h, button_w, button_h)
+        self.goal_tag_button_rect = rect
+        button_label = "Collapse" if self.goal_tags_expanded else "Expand"
+        self.draw_control_button(rect, button_label)
+        y += 4
+        pg.draw.line(self.screen, self.palette["line"], (x, y), (x + max_width, y), 1)
+        return y + 8
+
     def draw_control_button(self, rect: Any, label: str) -> None:
         pg = self.pg
         pg.draw.rect(self.screen, self.palette["panel2"], rect, border_radius=5)
@@ -965,6 +1035,116 @@ class Viewer:
         y += 8
         pg.draw.line(self.screen, self.palette["line"], (x, y), (x + max_width, y), 1)
         return y + 8
+
+    def ros_output_rows(self, record: TraceRecord) -> list[tuple[str, str]]:
+        output = record.output
+        live_start = self.live_ros_value_text("/ly/game/is_start")
+        live_time = self.live_ros_value_text("/ly/game/time_left")
+        rows: list[tuple[str, str]] = [
+            ("Live source", self.live_ros_status_text()),
+            ("Live goal_pos", self.live_ros_value_text("/ly/navi/goal_pos", "cm")),
+            ("Live raw", self.live_ros_value_text("/ly/navi/goal_pos_raw", "cm")),
+            ("Live goal_id", self.live_ros_value_text("/ly/navi/goal")),
+            ("Live speed", self.live_ros_value_text("/ly/navi/speed_level")),
+            ("Live game", f"start={live_start} time={live_time}"),
+        ]
+        rows.extend(
+            [
+                ("Trace topic", output.output_topic or "-"),
+                ("Trace payload", self.ros_payload_text(record)),
+            ]
+        )
+        if output.final_goal_pos_topic and output.final_goal_pos_topic != output.output_topic:
+            rows.append(("Trace final", output.final_goal_pos_topic))
+        rows.extend(
+            [
+                ("Trace speed", f"/ly/navi/speed_level={output.speed_level}"),
+                ("SimPath", "visual only" if self.scripted_enabled else "off"),
+                ("Publish", output.publish_text()),
+            ]
+        )
+        return rows
+
+    def live_ros_value(self, topic: str) -> Any | None:
+        item = as_dict(self.live_ros_topics.get(topic))
+        if not item:
+            return None
+        return item.get("value")
+
+    def live_goal_position(self, topic: str) -> tuple[float, float] | None:
+        pos = parse_position(self.live_ros_value(topic))
+        if pos is None:
+            return None
+        if not (math.isfinite(pos[0]) and math.isfinite(pos[1])):
+            return None
+        return pos
+
+    def update_live_goal_history(self) -> None:
+        pos = self.live_goal_position("/ly/navi/goal_pos")
+        if pos is None:
+            return
+        if self.live_goal_history:
+            prev = self.live_goal_history[-1]
+            if math.hypot(pos[0] - prev[0], pos[1] - prev[1]) < 0.5:
+                return
+        self.live_goal_history.append(pos)
+        limit = max(1, int(self.timeline_config.get("path_history_limit", 500)))
+        if len(self.live_goal_history) > limit:
+            del self.live_goal_history[: len(self.live_goal_history) - limit]
+
+    def live_ros_value_text(self, topic: str, suffix: str = "") -> str:
+        item = as_dict(self.live_ros_topics.get(topic))
+        if not item:
+            return "-"
+        value = item.get("value")
+        text = self.format_live_value(value, suffix)
+        age_text = self.live_ros_item_age_text(item)
+        return f"{text} age={age_text}" if age_text else text
+
+    def live_ros_status_text(self) -> str:
+        if self.ros_state_path is None:
+            return "disabled"
+        if not self.ros_state_path.exists():
+            return f"waiting {self.ros_state_path.name}"
+        if self.live_ros_wall_time <= 0.0:
+            return "loading"
+        age = max(0.0, time.time() - self.live_ros_wall_time)
+        stale = " stale" if age > self.ros_monitor_stale_sec else ""
+        return f"monitor age={age:.2f}s{stale}"
+
+    def live_ros_item_age_text(self, item: dict[str, Any]) -> str:
+        item_time = self.to_float(item.get("wall_time"), 0.0)
+        if item_time <= 0.0:
+            return ""
+        age = max(0.0, time.time() - item_time)
+        stale = " stale" if age > self.ros_monitor_stale_sec else ""
+        return f"{age:.2f}s{stale}"
+
+    @staticmethod
+    def format_live_value(value: Any, suffix: str = "") -> str:
+        if isinstance(value, list):
+            text = "[" + ", ".join(str(item) for item in value) + "]"
+        else:
+            text = str(value)
+        return f"{text} {suffix}".strip()
+
+    def live_ros_age_text(self) -> str:
+        if self.live_ros_wall_time <= 0.0:
+            return "-"
+        age = max(0.0, time.time() - self.live_ros_wall_time)
+        stale = " stale" if age > self.ros_monitor_stale_sec else ""
+        return f"{age:.2f}s{stale}"
+
+    def ros_payload_text(self, record: TraceRecord) -> str:
+        output = record.output
+        if output.kind == "relative_target_bridge":
+            return f"target_rel valid={str(output.relative_target_valid).lower()}"
+        pos = record_position(record, self.goals)
+        if output.uses_goal_pos or pos is not None:
+            if pos is None:
+                return "[?, ?]"
+            return f"[{pos[0]:.0f}, {pos[1]:.0f}] cm"
+        return f"id={output.goal_id}"
 
     def draw_resource_bars(self, x: int, y: int, max_width: int, record: TraceRecord) -> int:
         referee = as_dict(record.raw.get("referee"))
@@ -1059,6 +1239,14 @@ class Viewer:
         if allowed is None and enabled is None:
             return "-"
         return f"allowed={allowed} enabled={enabled}"
+
+    @staticmethod
+    def use_xy_text(output: Any) -> str:
+        if output.kind == "relative_target_bridge":
+            return "true relative bridge"
+        if output.uses_goal_pos:
+            return "true bridge" if output.uses_tf_goal_bridge else "true direct"
+        return "false goal_id"
 
     @staticmethod
     def outpost_text(raw: dict[str, Any]) -> str:

@@ -6,6 +6,9 @@ Updated: 2026-04-27
 
 `decision_viz` is the maintained offline viewer for sentry decision behavior.
 It replays JSONL rows written by `behavior_tree` and draws the current decision on a 2D field map.
+The viewer shows whether the current navigation output is `UseXY` (`/ly/navi/goal_pos`) or goal-ID (`/ly/navi/goal`) mode.
+The right panel shows live ROS topic values from `/ly/navi/goal_pos`, `/ly/navi/goal_pos_raw`, `/ly/navi/goal`, and `/ly/navi/speed_level` when started through the offline live wrapper.
+In live mode, the current-goal marker and recent path prefer live `/ly/navi/goal_pos`; if that topic is absent, the viewer falls back to trace records and labels the marker as `TRACE`.
 
 This is for decision review and offline decision simulation. The viewer itself does not publish ROS topics.
 In offline mode, it can send file-based control commands to `decision_viz.mock_inputs` for match clock control.
@@ -157,6 +160,12 @@ YAML default stream config is under `src/decision_viz/config/default.yaml`:
 - `web_stream.port`
 - `web_stream.fps`
 - `web_stream.jpeg_quality`
+- `map_tags.goal_tags_expanded`
+- `map_tags.hover_goal_tags`
+- `map_tags.hover_radius_px`
+- `ros_monitor.state_file`
+- `ros_monitor.poll_sec`
+- `ros_monitor.stale_sec`
 
 Offline match-control defaults are in the same YAML:
 
@@ -177,6 +186,7 @@ Live follow mode panel includes `Start`, `Pause`, `+10s`, `-10s`, `Reset` contro
 The HTTP page (`/`) provides the same control buttons and writes commands to `match_control.control_file`.
 Match clock is rendered as a real-time countdown; pressing `Start` starts countdown immediately.
 Live view opens the full viewer immediately, then updates when real trace rows arrive.
+`scripted_path` is disabled by default because it is a visual-only simulated route overlay, not a behavior_tree output.
 When scripted path is enabled, route marker movement uses `speed_cmps` and elapsed match time.
 By default, only the visited route plus the current target segment is drawn; set `show_future: true` to draw the full planned route.
 

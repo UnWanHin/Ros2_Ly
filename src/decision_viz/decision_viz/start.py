@@ -271,6 +271,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Override viewer web JPEG quality in live view (default: YAML web_stream.jpeg_quality).",
     )
     parser.add_argument(
+        "--ros-state-file",
+        default="/tmp/decision_viz_ros_topics.json",
+        help="Live ROS topic state JSON path for --live-view (default: /tmp/decision_viz_ros_topics.json).",
+    )
+    parser.add_argument(
+        "--no-live-ros-monitor",
+        action="store_true",
+        help="Disable the live ROS topic monitor used by the viewer right panel.",
+    )
+    parser.add_argument(
         "extra_launch_args",
         nargs=argparse.REMAINDER,
         help="Extra launch args passed through to scripts/start.sh. Put them after '--'.",
@@ -288,6 +298,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--live-web-fps must be >= 0")
     if args.live_web_jpeg_quality < 0 or args.live_web_jpeg_quality > 100:
         parser.error("--live-web-jpeg-quality must be in [0, 100]")
+    if not args.ros_state_file.strip():
+        parser.error("--ros-state-file must not be empty")
     if args.match_duration_sec <= 0:
         parser.error("--match-duration-sec must be > 0")
     if args.play and args.live_view:
@@ -504,6 +516,35 @@ def build_mock_command(root: Path, args: argparse.Namespace) -> tuple[list[str],
     return (["bash", "-lc", shell_cmd], shell_cmd)
 
 
+def build_ros_topic_monitor_command(root: Path, state_file: str) -> tuple[list[str], str]:
+    system_python = Path("/usr/bin/python3")
+    python_exec = str(system_python if system_python.exists() else Path(sys.executable))
+    python_args = [
+        python_exec,
+        "-m",
+        "decision_viz.ros_topic_monitor",
+        "--state-file",
+        str(Path(state_file).expanduser().resolve()),
+    ]
+
+    setup_cmds: list[str] = []
+    ros_setup = Path("/opt/ros/humble/setup.bash")
+    ws_setup = root / "install" / "setup.bash"
+    if ros_setup.exists():
+        setup_cmds.append(f"source {shlex.quote(str(ros_setup))}")
+    if ws_setup.exists():
+        setup_cmds.append(f"source {shlex.quote(str(ws_setup))}")
+    setup_cmds.append("mkdir -p /tmp/ros2_logs")
+    setup_cmds.append("export ROS_LOG_DIR=/tmp/ros2_logs")
+    setup_cmds.append(
+        f"export PYTHONPATH={shlex.quote(str((root / 'src' / 'decision_viz').resolve()))}:$PYTHONPATH"
+    )
+    quoted_python = " ".join(shlex.quote(item) for item in python_args)
+    setup_cmds.append(quoted_python)
+    shell_cmd = " && ".join(setup_cmds)
+    return (["bash", "-lc", shell_cmd], shell_cmd)
+
+
 def build_offline_bt_config(root: Path, source_config: Path) -> Path:
     with source_config.open("r", encoding="utf-8") as stream:
         data = json.load(stream)
@@ -539,6 +580,7 @@ def start_live_viewer(
     web_jpeg_quality: int,
     control_file: str,
     match_duration_sec: int,
+    ros_state_file: str,
 ) -> subprocess.Popen[bytes]:
     cmd = [
         sys.executable,
@@ -563,6 +605,8 @@ def start_live_viewer(
         cmd.extend(["--control-file", str(Path(control_file).expanduser().resolve())])
     if match_duration_sec > 0:
         cmd.extend(["--match-duration-sec", str(match_duration_sec)])
+    if str(ros_state_file).strip():
+        cmd.extend(["--ros-state-file", str(Path(ros_state_file).expanduser().resolve())])
     return subprocess.Popen(cmd)
 
 
@@ -624,19 +668,27 @@ def main(argv: list[str] | None = None) -> int:
     print(f"start command: {' '.join(start_cmd)}")
     mock_cmd: list[str] | None = None
     mock_cmd_desc = ""
+    ros_monitor_cmd: list[str] | None = None
+    ros_monitor_cmd_desc = ""
     control_path: Path | None = None
+    ros_state_path = Path(args.ros_state_file).expanduser().resolve()
     if args.offline_decision:
         if str(args.control_file).strip():
             control_path = Path(args.control_file).expanduser().resolve()
             print(f"control file: {control_path}")
         mock_cmd, mock_cmd_desc = build_mock_command(root, args)
         print(f"mock command: {mock_cmd_desc}")
+    if args.live_view and not args.no_live_ros_monitor:
+        ros_monitor_cmd, ros_monitor_cmd_desc = build_ros_topic_monitor_command(root, args.ros_state_file)
+        print(f"live ROS topic state: {ros_state_path}")
+        print(f"ROS topic monitor command: {ros_monitor_cmd_desc}")
 
     if args.dry_run:
         return 0
 
     mock_proc: subprocess.Popen[bytes] | None = None
     viewer_proc: subprocess.Popen[bytes] | None = None
+    ros_monitor_proc: subprocess.Popen[bytes] | None = None
     try:
         if control_path is not None:
             control_path.parent.mkdir(parents=True, exist_ok=True)
@@ -645,6 +697,11 @@ def main(argv: list[str] | None = None) -> int:
                     control_path.unlink()
                 except OSError:
                     pass
+        if ros_state_path.exists():
+            try:
+                ros_state_path.unlink()
+            except OSError:
+                pass
         if mock_cmd is not None:
             mock_proc = subprocess.Popen(mock_cmd)
             # If mock exits immediately, offline inputs are not being published.
@@ -660,6 +717,16 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 2
+        if ros_monitor_cmd is not None:
+            ros_monitor_proc = subprocess.Popen(ros_monitor_cmd)
+            time.sleep(0.3)
+            monitor_rc = ros_monitor_proc.poll()
+            if monitor_rc is not None:
+                print(
+                    f"live ROS topic monitor exited early (rc={monitor_rc}); right panel will use trace only.",
+                    file=sys.stderr,
+                )
+                ros_monitor_proc = None
         if args.live_view:
             if trace_path is None:
                 print("trace is disabled but --live-view requested", file=sys.stderr)
@@ -682,6 +749,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.live_web_jpeg_quality,
                 args.control_file,
                 args.match_duration_sec,
+                args.ros_state_file,
             )
             # Give viewer a moment to start and enter follow wait state.
             time.sleep(0.5)
@@ -720,6 +788,13 @@ def main(argv: list[str] | None = None) -> int:
             except subprocess.TimeoutExpired:
                 mock_proc.kill()
                 mock_proc.wait(timeout=3)
+        if ros_monitor_proc is not None and ros_monitor_proc.poll() is None:
+            ros_monitor_proc.terminate()
+            try:
+                ros_monitor_proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                ros_monitor_proc.kill()
+                ros_monitor_proc.wait(timeout=3)
 
 
 if __name__ == "__main__":

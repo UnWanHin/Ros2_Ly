@@ -66,6 +66,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Path to match-control command JSONL (overrides YAML match_control.control_file).",
     )
     parser.add_argument(
+        "--ros-state-file",
+        default="",
+        help="Path to live ROS topic monitor JSON state file (overrides YAML ros_monitor.state_file).",
+    )
+    parser.add_argument(
         "--match-duration-sec",
         type=int,
         default=0,
@@ -79,6 +84,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def make_bootstrap_record(config: dict, goals: dict[int, dict], goal_names: dict[int, str]):
     field = config.get("field_cm", {}) if isinstance(config.get("field_cm"), dict) else {}
     match_cfg = config.get("match_control", {}) if isinstance(config.get("match_control"), dict) else {}
+    ros_monitor_cfg = config.get("ros_monitor", {}) if isinstance(config.get("ros_monitor"), dict) else {}
     duration_sec = int(match_cfg.get("duration_sec", 420) or 420)
     home = goals.get(0, {})
     home_pos = home.get("red") or (0.0, 0.0)
@@ -153,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     paths = config.get("paths", {}) if isinstance(config.get("paths"), dict) else {}
     web_cfg = config.get("web_stream", {}) if isinstance(config.get("web_stream"), dict) else {}
     match_cfg = config.get("match_control", {}) if isinstance(config.get("match_control"), dict) else {}
+    ros_monitor_cfg = config.get("ros_monitor", {}) if isinstance(config.get("ros_monitor"), dict) else {}
 
     web_stream_enabled = (
         bool(args.web_stream)
@@ -185,6 +192,10 @@ def main(argv: list[str] | None = None) -> int:
         match_cfg["duration_sec"] = int(args.match_duration_sec)
     if match_cfg:
         config["match_control"] = match_cfg
+    if args.ros_state_file.strip():
+        ros_monitor_cfg["state_file"] = args.ros_state_file.strip()
+    if ros_monitor_cfg:
+        config["ros_monitor"] = ros_monitor_cfg
     control_file = str(match_cfg.get("control_file", "")).strip()
     if control_file:
         control_file = str(Path(control_file).expanduser().resolve())

@@ -20,7 +20,7 @@ paths:
 web_stream:
   enabled: true
   host: 0.0.0.0
-  port: 9000
+  port: 9000 #自定義的端口127.0.0.0:<ports>
   fps: 12.0
   jpeg_quality: 80
 
@@ -32,6 +32,11 @@ match_control:
   forward_step_sec: 10
   control_file: /tmp/decision_viz_match_control.jsonl
 
+ros_monitor:
+  state_file: /tmp/decision_viz_ros_topics.json
+  poll_sec: 0.05
+  stale_sec: 1.0
+
 field_cm:
   width: 2800
   height: 1500
@@ -41,14 +46,19 @@ timeline:
   path_history_limit: 500
   jump_step: 25
 
+map_tags:
+  goal_tags_expanded: false
+  hover_goal_tags: true
+  hover_radius_px: 18
+
 scripted_path:
-  enabled: true
+  enabled: false
   side: auto            # auto/red/blue
-  speed_cmps: 140       # cm/s
+  speed_cmps: 140       # cm/s 調的gui速度，差不多就好了
   loop: true
   show_labels: false
   show_future: false
-  label: Patrol
+  label: SimPath
   line_width: 3
   marker_radius: 8
   color: "#f5c542"
@@ -120,7 +130,7 @@ structures:
   note: >
     Key structures are annotated for offline decision review. Geometry is approximate to map artwork and should be
     refined with official CAD alignment if used for precise navigation constraints.
-  show_labels: true
+  show_labels: false
   styles:
     wall:
       fill: "#7b8794"

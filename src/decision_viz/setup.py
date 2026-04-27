@@ -25,6 +25,7 @@ setup(
             "decision-viz = decision_viz.main:main",
             "decision-viz-start = decision_viz.start:main",
             "decision-viz-mock-inputs = decision_viz.mock_inputs:main",
+            "decision-viz-ros-topic-monitor = decision_viz.ros_topic_monitor:main",
         ],
     },
 )
