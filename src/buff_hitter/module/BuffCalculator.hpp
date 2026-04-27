@@ -14,6 +14,7 @@
 #include <random>
 #include <shared_mutex> 
 #include <thread>
+#include <vector>
 #include "Param/param.hpp"
 #define ANGLE_BETWEEN_FAN_BLADES (72 * CV_PI / 180)
 #define MIN_FIT_DATA_SIZE 20
@@ -87,7 +88,10 @@ class BuffCalculator {
     public:
         Frame buff_frame;
         bool is_shift = false;
-        explicit BuffCalculator(const param::Param& json_param) {
+        explicit BuffCalculator(
+            const param::Param& json_param,
+            const std::vector<double>& solver_intrinsic_flat = {},
+            const std::vector<double>& solver_distortion_flat = {}) {
             // : m_worldPoints{{(float)(-0.5 * Param::ARMOR_INSIDE_WIDTH), (float)Param::ARMOR_INSIDE_Y, 0.0},
             //                 {(float)(0.5 * Param::ARMOR_INSIDE_WIDTH), (float)Param::ARMOR_INSIDE_Y, 0.0},
             //                 {0.0, (float)(-Param::ARMOR_OUTSIDE_Y - Param::ARMOR_OUTSIDE_HEIGHT), 0.0},
@@ -156,15 +160,30 @@ class BuffCalculator {
             auto_mode_min_abs_omega_ = std::max(0.0, auto_mode_min_abs_omega_);
             loadShootTableAdjust(json_param);
 
-            auto intrinsicArray = json_param["solver"]["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
             Eigen::Matrix3d cameraIntrinsicMatrix;
             Vector5d distorationCoefficients;// k1,k2,p1,p2,k3
-            for (int i = 0; i < 3; ++i)
-                for (int j = 0; j < 3; ++j)
-                    cameraIntrinsicMatrix(i, j) = intrinsicArray[i][j];
-            auto distortionCoefficientsArray = json_param["solver"]["camera_distortion_matrix"].to<std::vector<double>>();
-            for (int i = 0; i < 5; ++i)
-                distorationCoefficients(i) = distortionCoefficientsArray[i];
+            const bool use_solver_calibration =
+                solver_intrinsic_flat.size() == 9 && solver_distortion_flat.size() == 5;
+
+            if (use_solver_calibration) {
+                for (int i = 0; i < 3; ++i)
+                    for (int j = 0; j < 3; ++j)
+                        cameraIntrinsicMatrix(i, j) = solver_intrinsic_flat[i * 3 + j];
+            } else {
+                auto intrinsicArray = json_param["solver"]["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
+                for (int i = 0; i < 3; ++i)
+                    for (int j = 0; j < 3; ++j)
+                        cameraIntrinsicMatrix(i, j) = intrinsicArray[i][j];
+            }
+
+            if (use_solver_calibration) {
+                for (int i = 0; i < 5; ++i)
+                    distorationCoefficients(i) = solver_distortion_flat[i];
+            } else {
+                auto distortionCoefficientsArray = json_param["solver"]["camera_distortion_matrix"].to<std::vector<double>>();
+                for (int i = 0; i < 5; ++i)
+                    distorationCoefficients(i) = distortionCoefficientsArray[i];
+            }
 
             cv::eigen2cv(cameraIntrinsicMatrix, cameraMatrix);
             cv::eigen2cv(distorationCoefficients, distCoeffs);

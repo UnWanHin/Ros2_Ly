@@ -22,6 +22,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <deque>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <atomic>
@@ -138,8 +139,8 @@ private:
     bool is_game_begin{false}; // 比赛开始的标志
     FireCodeType RecFireCode{}; // 云台的火控数据
     std::uint8_t postureState{0}; // 云台/下位机回传姿态: 0=未知, 1=进攻, 2=防御, 3=移动
-    std::uint8_t capV;
-    std::uint8_t naviLowerHead{false};
+    std::uint8_t capV{0};
+    std::uint8_t naviLowerHead{0};
 
 
     /// 决策修改控制数据需要的前置数据
@@ -275,6 +276,13 @@ private:
     std::chrono::steady_clock::time_point lastUpdateBlackboardLogTime_{};
     std::chrono::steady_clock::time_point lastTreeTickLogTime_{};
     std::chrono::steady_clock::time_point lastTransportLogTime_{};
+    std::ofstream decisionTraceStream_{};
+    std::string decisionTraceFile_{};
+    bool decisionTraceRequested_{false};
+    bool decisionTraceEnabled_{false};
+    int decisionTraceEveryTicks_{5};
+    std::uint64_t decisionTraceTickCount_{0};
+    std::uint64_t decisionTraceWriteCount_{0};
 
     RateClock fireRateClock{20}, treeTickRateClock{100}, naviCommandRateClock{2}; // 频率控制
     TimerClock rotateTimerClock{Seconds{2}}; // 旋转时间
@@ -452,6 +460,9 @@ public:
 
     // 获取配置文件
     bool ConfigurationInit();
+    bool InitDecisionTrace();
+    void WriteDecisionTrace(std::string_view event);
+    void CloseDecisionTrace();
     void StartRuntimeGuard();
     void StopRuntimeGuard();
     void RuntimeGuardLoop();

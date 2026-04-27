@@ -93,6 +93,9 @@ def generate_launch_description():
     publish_navi_goal = LaunchConfiguration("publish_navi_goal")
     wait_for_game_start_timeout_sec = LaunchConfiguration("wait_for_game_start_timeout_sec")
     league_referee_stale_timeout_ms = LaunchConfiguration("league_referee_stale_timeout_ms")
+    decision_trace_enabled = LaunchConfiguration("decision_trace_enabled")
+    decision_trace_file = LaunchConfiguration("decision_trace_file")
+    decision_trace_every_n_ticks = LaunchConfiguration("decision_trace_every_n_ticks")
 
     use_gimbal = LaunchConfiguration("use_gimbal")
     use_detector = LaunchConfiguration("use_detector")
@@ -182,6 +185,21 @@ def generate_launch_description():
             default_value="0",
             description="0 disables stale-check. >0 enables league referee freshness guard for HP/Ammo recovery.",
         ),
+        DeclareLaunchArgument(
+            "decision_trace_enabled",
+            default_value="false",
+            description="Debug only: enable JSONL decision trace for offline pygame replay.",
+        ),
+        DeclareLaunchArgument(
+            "decision_trace_file",
+            default_value="",
+            description="JSONL decision trace output path. Used only when decision_trace_enabled is true.",
+        ),
+        DeclareLaunchArgument(
+            "decision_trace_every_n_ticks",
+            default_value="5",
+            description="Write one decision trace record every N behavior_tree ticks when tracing is enabled.",
+        ),
         DeclareLaunchArgument("use_gimbal", default_value="true"),
         DeclareLaunchArgument("use_detector", default_value="true"),
         DeclareLaunchArgument("use_tracker", default_value="true"),
@@ -220,6 +238,9 @@ def generate_launch_description():
         LogInfo(msg=["[sentry_all] publish_navi_goal: ", publish_navi_goal]),
         LogInfo(msg=["[sentry_all] wait_for_game_start_timeout_sec: ", wait_for_game_start_timeout_sec]),
         LogInfo(msg=["[sentry_all] league_referee_stale_timeout_ms: ", league_referee_stale_timeout_ms]),
+        LogInfo(msg=["[sentry_all] decision_trace_enabled: ", decision_trace_enabled]),
+        LogInfo(msg=["[sentry_all] decision_trace_file: ", decision_trace_file]),
+        LogInfo(msg=["[sentry_all] decision_trace_every_n_ticks: ", decision_trace_every_n_ticks]),
     ]
 
     nodes = [
@@ -338,6 +359,9 @@ def generate_launch_description():
                     "publish_navi_goal": publish_navi_goal,
                     "wait_for_game_start_timeout_sec": wait_for_game_start_timeout_sec,
                     "league_referee_stale_timeout_ms": league_referee_stale_timeout_ms,
+                    "decision_trace_enabled": decision_trace_enabled,
+                    "decision_trace_file": decision_trace_file,
+                    "decision_trace_every_n_ticks": decision_trace_every_n_ticks,
                 }
             ],
             on_exit=Shutdown(reason="behavior_tree exited"),

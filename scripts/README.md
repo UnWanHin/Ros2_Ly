@@ -31,6 +31,7 @@ scripts/
 ├── start.sh                 # 启动类总入口（交互菜单）
 ├── debug.sh                 # 调试/联调类总入口（交互菜单）
 ├── selfcheck.sh             # 自检类总入口（交互菜单）
+├── python/start.py          # 离线决策一键入口（固定 regional）
 ├── start/                   # 启动类分类脚本
 ├── debug/                   # 调试类分类脚本
 ├── selfcheck/               # 自检类分类脚本
@@ -100,6 +101,30 @@ scripts/
 ```bash
 ./scripts/start.sh gated --mode league
 ./scripts/start.sh gated --mode regional
+```
+
+### 2.1 离线决策一键入口（固定 regional）
+
+```bash
+python3 ./scripts/python/start.py
+```
+
+默认会同时打开：
+
+- pygame 窗口
+- 端口画面流：`http://127.0.0.1:<port>/`（默认读 `src/decision_viz/config/default.yaml` 的 `web_stream.port`，默认值 9000）
+- 分区赛超对抗 7 分钟离线比赛时钟（默认 420 秒）
+- 右侧控制按钮：`Start` / `Pause` / `+10s` / `-10s` / `Reset`
+
+可选：
+
+```bash
+python3 ./scripts/python/start.py --target predictor
+python3 ./scripts/python/start.py --trace
+python3 ./scripts/python/start.py --no-view
+python3 ./scripts/python/start.py --web-port 9010
+python3 ./scripts/python/start.py --match-duration-sec 420
+python3 ./scripts/python/start.py --control-file /tmp/decision_viz_match_control.jsonl
 ```
 
 ### 3. `showcase` 是什么

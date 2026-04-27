@@ -734,6 +734,9 @@ namespace BehaviorTree {
                 lastTreeTickLogTime_ = now;
             }
             TreeTickGuarded();
+            if (decisionTraceEnabled_) {
+                WriteDecisionTrace("tick");
+            }
             treeTickRateClock.sleep();
         }
     }

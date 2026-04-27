@@ -157,6 +157,9 @@ std::string DefaultConfigPathForProfile(const std::string& pkg_path, const std::
             publishNaviGoal_ = ReadBoolParameter(*node_, "publish_navi_goal", true);
             waitForGameStartTimeoutSec_ = std::max(0, ReadIntParameter(*node_, "wait_for_game_start_timeout_sec", 0));
             leagueRefereeStaleTimeoutMs_ = std::max(0, ReadIntParameter(*node_, "league_referee_stale_timeout_ms", 0));
+            decisionTraceRequested_ = ReadBoolParameter(*node_, "decision_trace_enabled", false);
+            decisionTraceFile_ = ReadStringParameter(*node_, "decision_trace_file", "");
+            decisionTraceEveryTicks_ = std::max(1, ReadIntParameter(*node_, "decision_trace_every_n_ticks", 5));
 
             const std::string default_tree_file = pkg_path + "/Scripts/main.xml";
             // 按 profile 选择默认 JSON：
@@ -182,6 +185,9 @@ std::string DefaultConfigPathForProfile(const std::string& pkg_path, const std::
             LoggerPtr->Info("publish_navi_goal: {}", publishNaviGoal_ ? "true" : "false");
             LoggerPtr->Info("wait_for_game_start_timeout_sec: {}", waitForGameStartTimeoutSec_);
             LoggerPtr->Info("league_referee_stale_timeout_ms: {}", leagueRefereeStaleTimeoutMs_);
+            LoggerPtr->Info("decision_trace_enabled: {}", decisionTraceRequested_ ? "true" : "false");
+            LoggerPtr->Info("decision_trace_file: {}", decisionTraceFile_.empty() ? "<disabled>" : decisionTraceFile_);
+            LoggerPtr->Info("decision_trace_every_n_ticks: {}", decisionTraceEveryTicks_);
         } catch (const std::exception& e) {
             RCLCPP_ERROR(node_->get_logger(), "Error: Could not find package 'behavior_tree'.");
             throw e;
@@ -236,11 +242,17 @@ std::string DefaultConfigPathForProfile(const std::string& pkg_path, const std::
         runtimeRecoveryWindowStart_ = std::chrono::steady_clock::now();
         runtimeLastSoftRecoverTime_ = std::chrono::steady_clock::time_point{};
 
+        InitDecisionTrace();
+
         LoggerPtr->Info("Application Start!");
     }
 
     Application::~Application() {
         StopRuntimeGuard();
+        if (decisionTraceEnabled_) {
+            WriteDecisionTrace("stop");
+        }
+        CloseDecisionTrace();
         if(LoggerPtr) {
             LoggerPtr->Info("Application Stop!");
             LoggerPtr->Flush();
@@ -260,6 +272,9 @@ std::string DefaultConfigPathForProfile(const std::string& pkg_path, const std::
 
         // 2. 記錄比賽開始時間
         gameStartTime = std::chrono::steady_clock::now();
+        if (decisionTraceEnabled_) {
+            WriteDecisionTrace("game_start");
+        }
 
         StartRuntimeGuard();
 

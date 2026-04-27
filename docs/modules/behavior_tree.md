@@ -32,6 +32,7 @@ behavior_tree/
 │   └── Robot.hpp               # Robot類/UnitType/UnitTeam 等遊戲數據類型
 ├── src/
 │   ├── Application.cpp         # 構造函數、Run() 流程
+│   ├── DecisionTrace.cpp       # 可選 JSONL 決策 trace（離線 decision_viz 使用）
 │   ├── GameLoop.cpp            # 主循環邏輯（UpdateBlackBoard/TreeTick/PublishTogether）
 │   ├── BehaviorTree.cpp        # BT初始化（RegisterTreeNodes, LoadBehaviorTree）
 │   ├── Configuration.cpp       # 讀取 config.json
@@ -127,6 +128,7 @@ Application::Application()
 ├── 從 ament_index 獲取包路徑 → 定位 Scripts/main.xml 和 config.json
 ├── 可選讀取 `competition_profile` / `bt_config_file` / `bt_tree_file`
 ├── 可選讀取 `debug_bypass_is_start` / `wait_for_game_start_timeout_sec` / `league_referee_stale_timeout_ms`
+├── 可選讀取 `decision_trace_enabled` / `decision_trace_file` / `decision_trace_every_n_ticks`（默認不寫 trace）
 ├── SubscribeMessageAll()     → 訂閱全部上游 Topics
 ├── PublishMessageAll()       → 創建全部發布者
 ├── ConfigurationInit()       → 讀取 config.json
@@ -142,6 +144,24 @@ Run()
 ├── gameStartTime = now()
 └── GameLoop()        ← 主循環
 ```
+
+### `src/DecisionTrace.cpp` — 離線決策可視化輸出
+
+`decision_trace_enabled:=true` 且 `decision_trace_file` 非空時，`behavior_tree` 每隔 `decision_trace_every_n_ticks` 個 tick 寫一行 JSONL。該文件由 `src/decision_viz` 離線播放，不改變任何 ROS topic 或決策控制鏈。默認 `decision_trace_enabled:=false`，正常比賽不開檔、不寫 trace。
+
+Trace 會保留 `navi_goal` 原始資料，同時輸出穩定的 `decision_output` 模型。後續決策內部改成新的橋接或策略流程時，viewer 優先看 `decision_output.goal_pos_cm`、output topic、publish flags，而不是直接耦合到某個舊策略欄位。
+
+典型啟動：
+
+```bash
+./scripts/start.sh nogate --mode league \
+  decision_trace_enabled:=true \
+  decision_trace_file:=log/decision_trace.jsonl \
+  decision_trace_every_n_ticks:=5
+```
+
+維護文檔見：
+[docs/sentry/decision_visualization_2026-04-27.md](../sentry/decision_visualization_2026-04-27.md)
 
 ---
 

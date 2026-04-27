@@ -499,8 +499,30 @@ public:
             enemy_color_, default_buff_mode_, mode_switch_topic_enable_, reload_big_buff_,
             two_target_enable_, two_target_cycle_timeout_sec_);
 
+        std::vector<double> solver_intrinsic_flat;
+        std::vector<double> solver_distortion_flat;
+        loadParamCompat(
+            "solver_config/camera_intrinsic_matrix",
+            "solver_config.camera_intrinsic_matrix",
+            solver_intrinsic_flat);
+        loadParamCompat(
+            "solver_config/camera_distortion_coefficients",
+            "solver_config.camera_distortion_coefficients",
+            solver_distortion_flat);
+        if (solver_intrinsic_flat.size() == 9 && solver_distortion_flat.size() == 5) {
+            roslog::info("buff camera calibration: using solver_config from ROS parameters.");
+        } else {
+            roslog::warn(
+                "buff camera calibration: solver_config invalid (K={}, D={}), fallback to buff config.json.",
+                solver_intrinsic_flat.size(),
+                solver_distortion_flat.size());
+        }
+
         buff_detector_ptr = std::make_shared<BuffDetector>(red_buff_model_path, blue_buff_model_path);
-        buff_calculator_ptr = std::make_shared<BuffCalculator>(param);   //属于solver 越級了, 后面加新模塊buff再移
+        buff_calculator_ptr = std::make_shared<BuffCalculator>(
+            param,
+            solver_intrinsic_flat,
+            solver_distortion_flat);   //属于solver 越級了, 后面加新模塊buff再移
 
         bool force_stable_cfg = buff_param.exists("force_stable") ? buff_param["force_stable"].Bool() : false;
         bool auto_mode_enable_cfg = buff_param.exists("auto_mode_enable") ? buff_param["auto_mode_enable"].Bool() : true;
