@@ -18,6 +18,7 @@ DEFAULT_PREDICTOR_CONFIG_FILE="${ROOT_DIR}/src/predictor/config/predictor_config
 DEFAULT_OUTPOST_CONFIG_FILE="${ROOT_DIR}/src/outpost_hitter/config/outpost_config.yaml"
 DEFAULT_BUFF_CONFIG_FILE="${ROOT_DIR}/src/buff_hitter/config/buff_config.yaml"
 DEFAULT_OVERRIDE_CONFIG_FILE="${ROOT_DIR}/config/override_config.yaml"
+DEFAULT_COMMON_CONFIG_FILE="${ROOT_DIR}/config/common.yaml"
 
 STACK_LAUNCH_REGEX="ros2 launch behavior_tree sentry_all.launch.py"
 
@@ -49,6 +50,27 @@ has_launch_arg_key() {
     fi
   done
   return 1
+}
+
+read_common_bt_log_dir() {
+  local config_file="$1"
+  [[ -f "${config_file}" ]] || return 1
+
+  local value=""
+  value="$(sed -nE 's/^[[:space:]]*bt_log_dir:[[:space:]]*"?([^"#]+)"?[[:space:]]*(#.*)?$/\1/p' "${config_file}" | head -n 1)"
+
+  # trim leading / trailing spaces
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  [[ -n "${value}" ]] || return 1
+
+  if [[ "${value}" == "~" ]]; then
+    value="${HOME}"
+  elif [[ "${value}" == "~/"* ]]; then
+    value="${HOME}/${value#"~/"}"
+  fi
+
+  printf '%s\n' "${value}"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -94,6 +116,19 @@ done
 
 source_ros_workspace "${ROOT_DIR}"
 cleanup_existing_launch_tree "${CLEANUP_EXISTING}" "${STACK_LAUNCH_REGEX}"
+
+if [[ -z "${BT_LOG_DIR:-}" ]]; then
+  if BT_LOG_DIR_FROM_COMMON="$(read_common_bt_log_dir "${DEFAULT_COMMON_CONFIG_FILE}")"; then
+    export BT_LOG_DIR="${BT_LOG_DIR_FROM_COMMON}"
+    echo "[INFO] default BT_LOG_DIR=${BT_LOG_DIR} (from ${DEFAULT_COMMON_CONFIG_FILE})"
+  else
+    export BT_LOG_DIR="${HOME}/Log"
+    echo "[INFO] default BT_LOG_DIR=${BT_LOG_DIR}"
+  fi
+else
+  echo "[INFO] use BT_LOG_DIR=${BT_LOG_DIR}"
+fi
+mkdir -p "${BT_LOG_DIR}"
 
 if ! has_launch_arg_key "base_config_file"; then
   LAUNCH_ARGS=("base_config_file:=${DEFAULT_BASE_CONFIG_FILE}" "${LAUNCH_ARGS[@]}")

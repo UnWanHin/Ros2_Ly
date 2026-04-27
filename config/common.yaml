@@ -1,0 +1,3 @@
+# Shared startup options for launch wrapper scripts.
+# Used by scripts/launch/start_sentry_all.sh when BT_LOG_DIR is not set.
+bt_log_dir: ~/Log
